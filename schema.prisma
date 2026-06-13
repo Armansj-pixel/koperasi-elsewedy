@@ -1,0 +1,958 @@
+// =====================================================================
+// PWA KOPERASI KARYAWAN PT ELSEWEDY ELECTRIC INDONESIA
+// Schema Database Lengkap - Tier D Enterprise
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =====================================================================
+// ENUMS
+// =====================================================================
+
+enum UserRole {
+  ANGGOTA
+  SEKRETARIS
+  BENDAHARA
+  KETUA
+  SUPERADMIN
+}
+
+enum SimpananJenis {
+  SETORAN
+  PENARIKAN
+  KOREKSI
+}
+
+enum SimpananStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISBURSED
+}
+
+enum PinjamanStatus {
+  PENDING_L1     // Menunggu Sekretaris
+  PENDING_L2     // Menunggu Bendahara
+  PENDING_L3     // Menunggu Ketua
+  APPROVED       // Final approved, siap cair
+  DISBURSED      // Sudah cair, mulai cicilan
+  ACTIVE         // Sedang cicilan aktif
+  LUNAS          // Sudah lunas
+  REJECTED       // Ditolak
+  CANCELLED      // Dibatalkan
+}
+
+enum CicilanStatus {
+  SCHEDULED
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+enum KasJenis {
+  MASUK
+  KELUAR
+}
+
+enum KasKategori {
+  SETORAN_SIMPANAN
+  PENARIKAN_SIMPANAN
+  PENCAIRAN_PINJAMAN
+  PEMBAYARAN_CICILAN
+  BIAYA_ADMIN_PINJAMAN
+  TRANSFER_ANTAR_REKENING
+  PENDAPATAN_LAIN
+  BEBAN_OPERASIONAL
+  LAINNYA
+}
+
+enum KasKecilKategori {
+  ATK
+  KONSUMSI_RAPAT
+  TRANSPORTASI
+  FOTOCOPY
+  BIAYA_ADMINISTRASI
+  SUMBANGAN
+  HADIAH
+  PERAWATAN_KANTOR
+  LAIN_LAIN
+}
+
+enum BeritaKategori {
+  PENGUMUMAN
+  RAT
+  SHU
+  PENDIDIKAN
+  PROMO
+  UMUM
+}
+
+enum BeritaStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum NotifikasiTipe {
+  AKUN_DIBUAT
+  PENGAJUAN_PINJAMAN
+  APPROVAL_L1
+  APPROVAL_L2
+  APPROVAL_L3
+  PENCAIRAN_PINJAMAN
+  PENGAJUAN_PENARIKAN
+  PENCAIRAN_PENARIKAN
+  REJECT_PINJAMAN
+  REJECT_PENARIKAN
+  CICILAN_REMINDER
+  REPORT_HR_BULANAN
+  BERITA_BARU
+  PASSWORD_RESET
+  LAINNYA
+}
+
+enum NotifikasiStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+enum AccountType {
+  ASET                  // 1xxx
+  KEWAJIBAN             // 2xxx
+  MODAL                 // 3xxx
+  PENDAPATAN            // 4xxx
+  BEBAN                 // 5xxx
+}
+
+enum AccountSubType {
+  ASET_LANCAR
+  ASET_TETAP
+  ASET_LAIN
+  KEWAJIBAN_LANCAR
+  KEWAJIBAN_JANGKA_PANJANG
+  MODAL_DASAR
+  CADANGAN
+  SHU_BERJALAN
+  SHU_TIDAK_DIBAGI
+  PENDAPATAN_OPERASIONAL
+  PENDAPATAN_LAIN
+  BEBAN_OPERASIONAL
+  BEBAN_ADMIN
+  BEBAN_LAIN
+}
+
+enum JurnalType {
+  AUTO              // Auto-generated dari transaksi
+  MANUAL            // Input manual oleh akuntan
+  ADJUSTMENT        // Jurnal penyesuaian
+  CLOSING           // Jurnal penutup
+  REVERSING         // Jurnal balik
+}
+
+enum JurnalStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum AsetTetapStatus {
+  ACTIVE
+  DISPOSED
+  WRITTEN_OFF
+}
+
+enum ClosingStatus {
+  OPEN
+  CLOSING_IN_PROGRESS
+  CLOSED
+  REOPENED
+}
+
+enum SHUStatus {
+  CALCULATED
+  APPROVED_BY_RAT
+  DISTRIBUTED
+}
+// =====================================================================
+// CORE TABLES (MVP)
+// =====================================================================
+
+model User {
+  id                  String    @id @default(uuid()) @db.Uuid
+  nik                 String    @unique @db.VarChar(20)
+  nama                String    @db.VarChar(100)
+  email               String    @unique @db.VarChar(100)
+  noHp                String?   @map("no_hp") @db.VarChar(20)
+  noRekening          String?   @map("no_rekening") @db.VarChar(30)
+  namaBank            String?   @map("nama_bank") @db.VarChar(50)
+  fotoProfilUrl       String?   @map("foto_profil_url") @db.Text
+  passwordHash        String    @map("password_hash") @db.Text
+  mustChangePassword  Boolean   @default(true) @map("must_change_password")
+  role                UserRole  @default(ANGGOTA)
+  simpananBulanan     Decimal   @default(0) @map("simpanan_bulanan") @db.Decimal(15, 2)
+  tanggalBergabung    DateTime  @default(now()) @map("tanggal_bergabung") @db.Date
+  isActive            Boolean   @default(true) @map("is_active")
+  lastLoginAt         DateTime? @map("last_login_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  simpanan              Simpanan[]
+  saldoSimpanan         SaldoSimpanan?
+  penarikanSimpanan     PenarikanSimpanan[]
+  pinjaman              Pinjaman[]
+  cicilan               Cicilan[]
+  beritaAuthored        Berita[]            @relation("BeritaAuthor")
+  notifikasi            Notifikasi[]
+  auditLogs             AuditLog[]
+  kasKecilCreated       KasKecil[]          @relation("KasKecilCreator")
+  approvalL1            Pinjaman[]          @relation("ApprovalL1")
+  approvalL2            Pinjaman[]          @relation("ApprovalL2")
+  approvalL3            Pinjaman[]          @relation("ApprovalL3")
+  pencairanByMe         Pinjaman[]          @relation("PencairanBy")
+  penarikanApproved     PenarikanSimpanan[] @relation("PenarikanApprovedBy")
+  penarikanDisbursed    PenarikanSimpanan[] @relation("PenarikanDisbursedBy")
+  jurnalCreated         JurnalUmum[]        @relation("JurnalCreator")
+  closingByMe           ClosingPeriod[]     @relation("ClosingBy")
+  shuPerAnggota         SHUPerAnggota[]
+  
+  @@index([nik])
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model SaldoSimpanan {
+  userId      String    @id @map("user_id") @db.Uuid
+  totalSaldo  Decimal   @default(0) @map("total_saldo") @db.Decimal(15, 2)
+  lastUpdated DateTime  @default(now()) @map("last_updated")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("saldo_simpanan")
+}
+
+model Simpanan {
+  id          BigInt          @id @default(autoincrement())
+  userId      String          @map("user_id") @db.Uuid
+  jenis       SimpananJenis
+  nominal     Decimal         @db.Decimal(15, 2)
+  periode     String          @db.VarChar(7)  // YYYY-MM
+  tanggal     DateTime        @db.Date
+  status      SimpananStatus  @default(APPROVED)
+  keterangan  String?         @db.Text
+  referensiId BigInt?         @map("referensi_id")  // ke penarikan_simpanan
+  createdBy   String?         @map("created_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, tanggal])
+  @@index([periode])
+  @@map("simpanan")
+}
+
+model PenarikanSimpanan {
+  id                BigInt          @id @default(autoincrement())
+  userId            String          @map("user_id") @db.Uuid
+  nominal           Decimal         @db.Decimal(15, 2)
+  tanggalPengajuan  DateTime        @default(now()) @map("tanggal_pengajuan")
+  tanggalPencairan  DateTime?       @map("tanggal_pencairan")
+  status            SimpananStatus  @default(PENDING)
+  approvedBy        String?         @map("approved_by") @db.Uuid
+  approvedAt        DateTime?       @map("approved_at")
+  disbursedBy       String?         @map("disbursed_by") @db.Uuid
+  disbursedAt       DateTime?       @map("disbursed_at")
+  catatan           String?         @db.Text
+  rejectedReason    String?         @map("rejected_reason") @db.Text
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  user        User  @relation(fields: [userId], references: [id])
+  approver    User? @relation("PenarikanApprovedBy", fields: [approvedBy], references: [id])
+  disburser   User? @relation("PenarikanDisbursedBy", fields: [disbursedBy], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("penarikan_simpanan")
+}
+
+model Pinjaman {
+  id                       BigInt          @id @default(autoincrement())
+  nomorKontrak             String          @unique @map("nomor_kontrak") @db.VarChar(30)
+  userId                   String          @map("user_id") @db.Uuid
+  
+  // Nominal
+  nominalPokok             Decimal         @map("nominal_pokok") @db.Decimal(15, 2)
+  biayaAdmin               Decimal         @map("biaya_admin") @db.Decimal(15, 2)  // 4%
+  pelunasanPinjamanLamaId  BigInt?         @map("pelunasan_pinjaman_lama_id")
+  pelunasanPinjamanLama    Decimal         @default(0) @map("pelunasan_pinjaman_lama") @db.Decimal(15, 2)
+  nominalDiterima          Decimal         @map("nominal_diterima") @db.Decimal(15, 2)
+  
+  // Cicilan
+  tenorBulan               Int             @map("tenor_bulan")
+  cicilanPerBulan          Decimal         @map("cicilan_per_bulan") @db.Decimal(15, 2)
+  sisaPokok                Decimal         @map("sisa_pokok") @db.Decimal(15, 2)
+  sisaCicilan              Int             @map("sisa_cicilan")
+  cicilanMulaiPeriode      String          @map("cicilan_mulai_periode") @db.VarChar(7)
+  
+  // Status & Tanggal
+  status                   PinjamanStatus  @default(PENDING_L1)
+  tujuan                   String          @db.Text
+  tanggalPengajuan         DateTime        @default(now()) @map("tanggal_pengajuan")
+  tanggalCair              DateTime?       @map("tanggal_cair")
+  tanggalLunas             DateTime?       @map("tanggal_lunas")
+  
+  // Approval Tracking
+  approvalL1By             String?         @map("approval_l1_by") @db.Uuid
+  approvalL1At             DateTime?       @map("approval_l1_at")
+  approvalL2By             String?         @map("approval_l2_by") @db.Uuid
+  approvalL2At             DateTime?       @map("approval_l2_at")
+  approvalL3By             String?         @map("approval_l3_by") @db.Uuid
+  approvalL3At             DateTime?       @map("approval_l3_at")
+  pencairanBy              String?         @map("pencairan_by") @db.Uuid
+  pencairanAt              DateTime?       @map("pencairan_at")
+  
+  // Reject
+  rejectedBy               String?         @map("rejected_by") @db.Uuid
+  rejectedAt               DateTime?       @map("rejected_at")
+  rejectedReason           String?         @map("rejected_reason") @db.Text
+  
+  createdAt                DateTime        @default(now()) @map("created_at")
+  updatedAt                DateTime        @updatedAt @map("updated_at")
+
+  user           User      @relation(fields: [userId], references: [id])
+  cicilan        Cicilan[]
+  approverL1     User?     @relation("ApprovalL1", fields: [approvalL1By], references: [id])
+  approverL2     User?     @relation("ApprovalL2", fields: [approvalL2By], references: [id])
+  approverL3     User?     @relation("ApprovalL3", fields: [approvalL3By], references: [id])
+  disburser      User?     @relation("PencairanBy", fields: [pencairanBy], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([nomorKontrak])
+  @@map("pinjaman")
+}
+
+model Cicilan {
+  id              BigInt        @id @default(autoincrement())
+  pinjamanId      BigInt        @map("pinjaman_id")
+  userId          String        @map("user_id") @db.Uuid
+  cicilanKe       Int           @map("cicilan_ke")
+  periode         String        @db.VarChar(7)  // YYYY-MM
+  nominal         Decimal       @db.Decimal(15, 2)
+  tanggalJatuhTempo DateTime    @map("tanggal_jatuh_tempo") @db.Date
+  tanggalBayar    DateTime?     @map("tanggal_bayar")
+  status          CicilanStatus @default(SCHEDULED)
+  keterangan      String?       @db.Text
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  pinjaman Pinjaman @relation(fields: [pinjamanId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([pinjamanId, cicilanKe])
+  @@index([periode])
+  @@index([status])
+  @@map("cicilan")
+}
+
+model Notifikasi {
+  id        BigInt            @id @default(autoincrement())
+  userId    String            @map("user_id") @db.Uuid
+  tipe      NotifikasiTipe
+  subject   String            @db.VarChar(200)
+  body      String            @db.Text
+  metadata  Json?             // payload tambahan
+  emailTo   String            @map("email_to") @db.VarChar(100)
+  status    NotifikasiStatus  @default(PENDING)
+  sentAt    DateTime?         @map("sent_at")
+  readAt    DateTime?         @map("read_at")
+  errorMessage String?        @map("error_message") @db.Text
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([createdAt])
+  @@map("notifikasi")
+}
+
+model AuditLog {
+  id          BigInt    @id @default(autoincrement())
+  userId      String?   @map("user_id") @db.Uuid
+  action      String    @db.VarChar(100)
+  entity      String    @db.VarChar(50)
+  entityId    String?   @map("entity_id") @db.VarChar(50)
+  oldValue    Json?     @map("old_value")
+  newValue    Json?     @map("new_value")
+  ipAddress   String?   @map("ip_address") @db.VarChar(50)
+  userAgent   String?   @map("user_agent") @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+model HRReport {
+  id              BigInt    @id @default(autoincrement())
+  periode         String    @unique @db.VarChar(7)  // YYYY-MM
+  totalAnggota    Int       @map("total_anggota")
+  totalSimpanan   Decimal   @map("total_simpanan") @db.Decimal(15, 2)
+  totalCicilan    Decimal   @map("total_cicilan") @db.Decimal(15, 2)
+  grandTotal      Decimal   @map("grand_total") @db.Decimal(15, 2)
+  filePdfUrl      String?   @map("file_pdf_url") @db.Text
+  generatedAt     DateTime  @default(now()) @map("generated_at")
+  generatedBy     String?   @map("generated_by") @db.Uuid
+  sentToHrAt      DateTime? @map("sent_to_hr_at")
+  
+  @@map("hr_report")
+}
+
+model Setting {
+  id              Int       @id @default(autoincrement())
+  key             String    @unique @db.VarChar(100)
+  value           String    @db.Text
+  type            String    @default("string") @db.VarChar(20) // string, number, boolean, json
+  description     String?   @db.Text
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("setting")
+}
+// =====================================================================
+// STANDARD+ TABLES
+// =====================================================================
+
+model RekeningKas {
+  id              Int       @id @default(autoincrement())
+  nama            String    @db.VarChar(100)  // "Kas Tunai", "BCA Operasional"
+  jenisRekening   String    @map("jenis_rekening") @db.VarChar(20) // tunai, bank
+  namaBank        String?   @map("nama_bank") @db.VarChar(50)
+  noRekening      String?   @map("no_rekening") @db.VarChar(30)
+  namaPemegang    String?   @map("nama_pemegang") @db.VarChar(100)
+  saldoAwal       Decimal   @default(0) @map("saldo_awal") @db.Decimal(15, 2)
+  saldoBerjalan   Decimal   @default(0) @map("saldo_berjalan") @db.Decimal(15, 2)
+  isPrimary       Boolean   @default(false) @map("is_primary")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  mutasiKas       MutasiKas[]
+
+  @@map("rekening_kas")
+}
+
+model MutasiKas {
+  id              BigInt        @id @default(autoincrement())
+  rekeningKasId   Int           @map("rekening_kas_id")
+  jenis           KasJenis
+  kategori        KasKategori
+  nominal         Decimal       @db.Decimal(15, 2)
+  tanggal         DateTime      @db.Date
+  referensiId     String?       @map("referensi_id") @db.VarChar(50)
+  referensiType   String?       @map("referensi_type") @db.VarChar(50)
+  keterangan      String        @db.Text
+  saldoSetelah    Decimal       @map("saldo_setelah") @db.Decimal(15, 2)
+  createdBy       String?       @map("created_by") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  rekeningKas RekeningKas @relation(fields: [rekeningKasId], references: [id])
+
+  @@index([rekeningKasId, tanggal])
+  @@index([kategori])
+  @@map("mutasi_kas")
+}
+
+model TransferAntarRekening {
+  id                  BigInt    @id @default(autoincrement())
+  rekeningAsalId      Int       @map("rekening_asal_id")
+  rekeningTujuanId    Int       @map("rekening_tujuan_id")
+  nominal             Decimal   @db.Decimal(15, 2)
+  tanggal             DateTime  @db.Date
+  keterangan          String    @db.Text
+  buktiTransferUrl    String?   @map("bukti_transfer_url") @db.Text
+  createdBy           String    @map("created_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@map("transfer_antar_rekening")
+}
+
+model Pendapatan {
+  id              BigInt    @id @default(autoincrement())
+  jenis           String    @db.VarChar(50)  // biaya_admin_pinjaman, denda, lain
+  nominal         Decimal   @db.Decimal(15, 2)
+  referensiId     String?   @map("referensi_id") @db.VarChar(50)
+  referensiType   String?   @map("referensi_type") @db.VarChar(50)
+  tanggal         DateTime  @db.Date
+  periode         String    @db.VarChar(7)
+  keterangan      String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([periode])
+  @@index([jenis])
+  @@map("pendapatan")
+}
+
+model KasKecil {
+  id              BigInt              @id @default(autoincrement())
+  jenis           KasJenis
+  kategori        KasKecilKategori
+  nominal         Decimal             @db.Decimal(15, 2)
+  tanggal         DateTime            @db.Date
+  buktiUrl        String?             @map("bukti_url") @db.Text
+  keterangan      String              @db.Text
+  saldoSetelah    Decimal             @map("saldo_setelah") @db.Decimal(15, 2)
+  createdBy       String              @map("created_by") @db.Uuid
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  creator User @relation("KasKecilCreator", fields: [createdBy], references: [id])
+
+  @@index([tanggal])
+  @@index([kategori])
+  @@map("kas_kecil")
+}
+
+model Berita {
+  id              BigInt          @id @default(autoincrement())
+  judul           String          @db.VarChar(255)
+  slug            String          @unique @db.VarChar(255)
+  konten          String          @db.Text
+  excerpt         String?         @db.VarChar(500)
+  coverImageUrl   String?         @map("cover_image_url") @db.Text
+  kategori        BeritaKategori
+  status          BeritaStatus    @default(DRAFT)
+  isPinned        Boolean         @default(false) @map("is_pinned")
+  views           Int             @default(0)
+  authorId        String          @map("author_id") @db.Uuid
+  publishedAt     DateTime?       @map("published_at")
+  emailBlastSent  Boolean         @default(false) @map("email_blast_sent")
+  emailBlastAt    DateTime?       @map("email_blast_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  author User @relation("BeritaAuthor", fields: [authorId], references: [id])
+
+  @@index([status, publishedAt])
+  @@index([kategori])
+  @@map("berita")
+}
+// =====================================================================
+// PRO ACCOUNTING TABLES
+// =====================================================================
+
+model KategoriPendapatanBeban {
+  id              Int       @id @default(autoincrement())
+  kode            String    @unique @db.VarChar(20)
+  nama            String    @db.VarChar(100)
+  tipe            String    @db.VarChar(20) // pendapatan / beban
+  parentId        Int?      @map("parent_id")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  parent          KategoriPendapatanBeban?  @relation("KategoriHierarchy", fields: [parentId], references: [id])
+  children        KategoriPendapatanBeban[] @relation("KategoriHierarchy")
+  pendapatanBeban PendapatanBeban[]
+  anggaran        Anggaran[]
+
+  @@map("kategori_pendapatan_beban")
+}
+
+model PendapatanBeban {
+  id              BigInt    @id @default(autoincrement())
+  kategoriId      Int       @map("kategori_id")
+  tipe            String    @db.VarChar(20) // pendapatan / beban
+  nominal         Decimal   @db.Decimal(15, 2)
+  tanggal         DateTime  @db.Date
+  periode         String    @db.VarChar(7)
+  rekeningKasId   Int?      @map("rekening_kas_id")
+  buktiUrl        String?   @map("bukti_url") @db.Text
+  keterangan      String    @db.Text
+  jurnalUmumId    BigInt?   @map("jurnal_umum_id")
+  createdBy       String    @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  kategori KategoriPendapatanBeban @relation(fields: [kategoriId], references: [id])
+
+  @@index([periode])
+  @@index([tipe])
+  @@map("pendapatan_beban")
+}
+
+model Anggaran {
+  id              Int       @id @default(autoincrement())
+  kategoriId      Int       @map("kategori_id")
+  tahun           Int
+  bulan           Int?      // null = anggaran tahunan
+  nominalBudget   Decimal   @map("nominal_budget") @db.Decimal(15, 2)
+  realisasi       Decimal   @default(0) @db.Decimal(15, 2)
+  catatan         String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  kategori KategoriPendapatanBeban @relation(fields: [kategoriId], references: [id])
+
+  @@unique([kategoriId, tahun, bulan])
+  @@map("anggaran")
+}
+
+model ArusKas {
+  id              BigInt    @id @default(autoincrement())
+  periode         String    @db.VarChar(7)
+  kategori        String    @db.VarChar(50)  // operating, investing, financing
+  subKategori     String    @map("sub_kategori") @db.VarChar(100)
+  nominal         Decimal   @db.Decimal(15, 2)
+  jenis           KasJenis
+  tanggal         DateTime  @db.Date
+  referensiId     String?   @map("referensi_id") @db.VarChar(50)
+  keterangan      String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([periode, kategori])
+  @@map("arus_kas")
+}
+
+model KategoriAset {
+  id              Int       @id @default(autoincrement())
+  kode            String    @unique @db.VarChar(20)
+  nama            String    @db.VarChar(100)
+  umurEkonomis    Int       @map("umur_ekonomis")  // dalam bulan
+  tarifPenyusutan Decimal   @map("tarif_penyusutan") @db.Decimal(5, 2) // %
+  metode          String    @default("garis_lurus") @db.VarChar(20)
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  asetTetap       AsetTetap[]
+
+  @@map("kategori_aset")
+}
+
+model AsetTetap {
+  id                    BigInt          @id @default(autoincrement())
+  kodeAset              String          @unique @map("kode_aset") @db.VarChar(30)
+  kategoriId            Int             @map("kategori_id")
+  nama                  String          @db.VarChar(200)
+  deskripsi             String?         @db.Text
+  hargaPerolehan        Decimal         @map("harga_perolehan") @db.Decimal(15, 2)
+  nilaiResidual         Decimal         @default(0) @map("nilai_residual") @db.Decimal(15, 2)
+  akumulasiPenyusutan   Decimal         @default(0) @map("akumulasi_penyusutan") @db.Decimal(15, 2)
+  nilaiBuku             Decimal         @map("nilai_buku") @db.Decimal(15, 2)
+  tanggalPerolehan      DateTime        @map("tanggal_perolehan") @db.Date
+  tanggalDisposal       DateTime?       @map("tanggal_disposal") @db.Date
+  lokasi                String?         @db.VarChar(200)
+  pengguna              String?         @db.VarChar(100)
+  fotoUrl               String?         @map("foto_url") @db.Text
+  status                AsetTetapStatus @default(ACTIVE)
+  catatan               String?         @db.Text
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  kategori    KategoriAset @relation(fields: [kategoriId], references: [id])
+  penyusutan  Penyusutan[]
+
+  @@map("aset_tetap")
+}
+
+model Penyusutan {
+  id                    BigInt    @id @default(autoincrement())
+  asetTetapId           BigInt    @map("aset_tetap_id")
+  periode               String    @db.VarChar(7)
+  bulanKe               Int       @map("bulan_ke")
+  nominalPenyusutan     Decimal   @map("nominal_penyusutan") @db.Decimal(15, 2)
+  akumulasiPenyusutan   Decimal   @map("akumulasi_penyusutan") @db.Decimal(15, 2)
+  nilaiBukuSetelah      Decimal   @map("nilai_buku_setelah") @db.Decimal(15, 2)
+  jurnalUmumId          BigInt?   @map("jurnal_umum_id")
+  tanggal               DateTime  @db.Date
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  asetTetap AsetTetap @relation(fields: [asetTetapId], references: [id])
+
+  @@unique([asetTetapId, periode])
+  @@map("penyusutan")
+}
+
+model ClosingPeriod {
+  id                BigInt          @id @default(autoincrement())
+  periode           String          @unique @db.VarChar(7)
+  tipe              String          @default("monthly") @db.VarChar(20) // monthly / yearly
+  status            ClosingStatus   @default(OPEN)
+  totalPendapatan   Decimal?        @map("total_pendapatan") @db.Decimal(15, 2)
+  totalBeban        Decimal?        @map("total_beban") @db.Decimal(15, 2)
+  labaRugi          Decimal?        @map("laba_rugi") @db.Decimal(15, 2)
+  totalAset         Decimal?        @map("total_aset") @db.Decimal(15, 2)
+  totalKewajiban    Decimal?        @map("total_kewajiban") @db.Decimal(15, 2)
+  totalModal        Decimal?        @map("total_modal") @db.Decimal(15, 2)
+  closingNotes      String?         @map("closing_notes") @db.Text
+  closedBy          String?         @map("closed_by") @db.Uuid
+  closedAt          DateTime?       @map("closed_at")
+  reopenedBy        String?         @map("reopened_by") @db.Uuid
+  reopenedAt        DateTime?       @map("reopened_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  closer User? @relation("ClosingBy", fields: [closedBy], references: [id])
+
+  @@map("closing_period")
+}
+// =====================================================================
+// ENTERPRISE ACCOUNTING TABLES (SAK ETAP)
+// =====================================================================
+
+model ChartOfAccount {
+  id              Int             @id @default(autoincrement())
+  kodeAkun        String          @unique @map("kode_akun") @db.VarChar(20)
+  namaAkun        String          @map("nama_akun") @db.VarChar(150)
+  tipe            AccountType
+  subTipe         AccountSubType  @map("sub_tipe")
+  parentId        Int?            @map("parent_id")
+  level           Int             @default(1)
+  isHeader        Boolean         @default(false) @map("is_header")
+  isPostingOnly   Boolean         @default(true) @map("is_posting_only")
+  saldoNormal     String          @map("saldo_normal") @db.VarChar(10) // debit / kredit
+  saldoBerjalan   Decimal         @default(0) @map("saldo_berjalan") @db.Decimal(15, 2)
+  description     String?         @db.Text
+  isActive        Boolean         @default(true) @map("is_active")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  parent        ChartOfAccount?   @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children      ChartOfAccount[]  @relation("AccountHierarchy")
+  jurnalDetail  JurnalDetail[]
+  bukuBesar     BukuBesar[]
+
+  @@index([kodeAkun])
+  @@index([tipe])
+  @@map("chart_of_accounts")
+}
+
+model JurnalUmum {
+  id              BigInt        @id @default(autoincrement())
+  nomorJurnal     String        @unique @map("nomor_jurnal") @db.VarChar(30)
+  tanggal         DateTime      @db.Date
+  periode         String        @db.VarChar(7)
+  tipe            JurnalType    @default(AUTO)
+  status          JurnalStatus  @default(POSTED)
+  
+  referensiType   String?       @map("referensi_type") @db.VarChar(50)
+  referensiId     String?       @map("referensi_id") @db.VarChar(50)
+  
+  totalDebit      Decimal       @map("total_debit") @db.Decimal(15, 2)
+  totalKredit     Decimal       @map("total_kredit") @db.Decimal(15, 2)
+  
+  keterangan      String        @db.Text
+  notes           String?       @db.Text
+  
+  createdBy       String?       @map("created_by") @db.Uuid
+  postedAt        DateTime?     @map("posted_at")
+  reversedAt      DateTime?     @map("reversed_at")
+  reversedBy      String?       @map("reversed_by") @db.Uuid
+  reversalReason  String?       @map("reversal_reason") @db.Text
+  
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  details JurnalDetail[]
+  creator User?          @relation("JurnalCreator", fields: [createdBy], references: [id])
+
+  @@index([tanggal])
+  @@index([periode])
+  @@index([status])
+  @@index([referensiType, referensiId])
+  @@map("jurnal_umum")
+}
+
+model JurnalDetail {
+  id              BigInt          @id @default(autoincrement())
+  jurnalUmumId    BigInt          @map("jurnal_umum_id")
+  urutan          Int             @default(1)
+  akunId          Int             @map("akun_id")
+  posisi          String          @db.VarChar(10)  // debit / kredit
+  nominal         Decimal         @db.Decimal(15, 2)
+  keterangan      String?         @db.Text
+  
+  jurnal  JurnalUmum      @relation(fields: [jurnalUmumId], references: [id], onDelete: Cascade)
+  akun    ChartOfAccount  @relation(fields: [akunId], references: [id])
+
+  @@index([jurnalUmumId])
+  @@index([akunId])
+  @@map("jurnal_detail")
+}
+
+model BukuBesar {
+  id              BigInt    @id @default(autoincrement())
+  akunId          Int       @map("akun_id")
+  jurnalDetailId  BigInt    @map("jurnal_detail_id")
+  tanggal         DateTime  @db.Date
+  periode         String    @db.VarChar(7)
+  nomorJurnal     String    @map("nomor_jurnal") @db.VarChar(30)
+  keterangan      String    @db.Text
+  posisi          String    @db.VarChar(10)
+  nominal         Decimal   @db.Decimal(15, 2)
+  saldoBerjalan   Decimal   @map("saldo_berjalan") @db.Decimal(15, 2)
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  akun ChartOfAccount @relation(fields: [akunId], references: [id])
+
+  @@index([akunId, tanggal])
+  @@index([periode])
+  @@map("buku_besar")
+}
+
+model NeracaPeriode {
+  id                  BigInt    @id @default(autoincrement())
+  periode             String    @unique @db.VarChar(7)
+  tanggalNeraca       DateTime  @map("tanggal_neraca") @db.Date
+  
+  // Aset
+  totalAsetLancar     Decimal   @map("total_aset_lancar") @db.Decimal(15, 2)
+  totalAsetTetap      Decimal   @map("total_aset_tetap") @db.Decimal(15, 2)
+  totalAsetLain       Decimal   @map("total_aset_lain") @db.Decimal(15, 2)
+  totalAset           Decimal   @map("total_aset") @db.Decimal(15, 2)
+  
+  // Kewajiban
+  totalKewajibanLancar     Decimal   @map("total_kewajiban_lancar") @db.Decimal(15, 2)
+  totalKewajibanJangkaPanjang Decimal @map("total_kewajiban_jangka_panjang") @db.Decimal(15, 2)
+  totalKewajiban           Decimal   @map("total_kewajiban") @db.Decimal(15, 2)
+  
+  // Modal
+  modalDasar          Decimal   @map("modal_dasar") @db.Decimal(15, 2)
+  cadangan            Decimal   @db.Decimal(15, 2)
+  shuTidakDibagi      Decimal   @map("shu_tidak_dibagi") @db.Decimal(15, 2)
+  shuBerjalan         Decimal   @map("shu_berjalan") @db.Decimal(15, 2)
+  totalModal          Decimal   @map("total_modal") @db.Decimal(15, 2)
+  
+  totalPasiva         Decimal   @map("total_pasiva") @db.Decimal(15, 2)
+  
+  isBalanced          Boolean   @default(false) @map("is_balanced")
+  filePdfUrl          String?   @map("file_pdf_url") @db.Text
+  generatedAt         DateTime  @default(now()) @map("generated_at")
+  
+  details NeracaDetail[]
+
+  @@map("neraca_periode")
+}
+
+model NeracaDetail {
+  id              BigInt    @id @default(autoincrement())
+  neracaPeriodeId BigInt    @map("neraca_periode_id")
+  akunId          Int       @map("akun_id")
+  kodeAkun        String    @map("kode_akun") @db.VarChar(20)
+  namaAkun        String    @map("nama_akun") @db.VarChar(150)
+  tipe            String    @db.VarChar(20)
+  saldo           Decimal   @db.Decimal(15, 2)
+  
+  neraca NeracaPeriode @relation(fields: [neracaPeriodeId], references: [id], onDelete: Cascade)
+
+  @@map("neraca_detail")
+}
+
+model LabaRugiPeriode {
+  id                  BigInt    @id @default(autoincrement())
+  periode             String    @unique @db.VarChar(7)
+  tanggalAwal         DateTime  @map("tanggal_awal") @db.Date
+  tanggalAkhir        DateTime  @map("tanggal_akhir") @db.Date
+  
+  totalPendapatanOperasional   Decimal   @map("total_pendapatan_operasional") @db.Decimal(15, 2)
+  totalPendapatanLain          Decimal   @map("total_pendapatan_lain") @db.Decimal(15, 2)
+  totalPendapatan              Decimal   @map("total_pendapatan") @db.Decimal(15, 2)
+  
+  totalBebanOperasional        Decimal   @map("total_beban_operasional") @db.Decimal(15, 2)
+  totalBebanAdmin              Decimal   @map("total_beban_admin") @db.Decimal(15, 2)
+  totalBebanLain               Decimal   @map("total_beban_lain") @db.Decimal(15, 2)
+  totalBeban                   Decimal   @map("total_beban") @db.Decimal(15, 2)
+  
+  labaSebelumPajak             Decimal   @map("laba_sebelum_pajak") @db.Decimal(15, 2)
+  pajak                        Decimal   @default(0) @db.Decimal(15, 2)
+  labaBersih                   Decimal   @map("laba_bersih") @db.Decimal(15, 2)
+  
+  filePdfUrl                   String?   @map("file_pdf_url") @db.Text
+  generatedAt                  DateTime  @default(now()) @map("generated_at")
+  
+  details LabaRugiDetail[]
+
+  @@map("laba_rugi_periode")
+}
+
+model LabaRugiDetail {
+  id                  BigInt    @id @default(autoincrement())
+  labaRugiPeriodeId   BigInt    @map("laba_rugi_periode_id")
+  akunId              Int       @map("akun_id")
+  kodeAkun            String    @map("kode_akun") @db.VarChar(20)
+  namaAkun            String    @map("nama_akun") @db.VarChar(150)
+  tipe                String    @db.VarChar(20)  // pendapatan / beban
+  subTipe             String    @map("sub_tipe") @db.VarChar(50)
+  saldo               Decimal   @db.Decimal(15, 2)
+  
+  labaRugi LabaRugiPeriode @relation(fields: [labaRugiPeriodeId], references: [id], onDelete: Cascade)
+
+  @@map("laba_rugi_detail")
+}
+
+model SHURule {
+  id                  Int       @id @default(autoincrement())
+  tahun               Int       @unique
+  totalSHU            Decimal   @map("total_shu") @db.Decimal(15, 2)
+  
+  // Pembagian Persen sesuai AD/ART
+  persenJasaSimpanan  Decimal   @map("persen_jasa_simpanan") @db.Decimal(5, 2)
+  persenJasaPinjaman  Decimal   @map("persen_jasa_pinjaman") @db.Decimal(5, 2)
+  persenCadangan      Decimal   @map("persen_cadangan") @db.Decimal(5, 2)
+  persenPengurus      Decimal   @map("persen_pengurus") @db.Decimal(5, 2)
+  persenKesejahteraan Decimal   @map("persen_kesejahteraan") @db.Decimal(5, 2)
+  persenPendidikan    Decimal   @map("persen_pendidikan") @db.Decimal(5, 2)
+  persenSosial        Decimal   @map("persen_sosial") @db.Decimal(5, 2)
+  
+  totalJasaSimpanan   Decimal   @map("total_jasa_simpanan") @db.Decimal(15, 2)
+  totalJasaPinjaman   Decimal   @map("total_jasa_pinjaman") @db.Decimal(15, 2)
+  
+  status              SHUStatus @default(CALCULATED)
+  approvedAt          DateTime? @map("approved_at")
+  approvedBy          String?   @map("approved_by") @db.Uuid
+  distributedAt       DateTime? @map("distributed_at")
+  
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  shuPerAnggota SHUPerAnggota[]
+
+  @@map("shu_rule")
+}
+
+model SHUPerAnggota {
+  id                BigInt    @id @default(autoincrement())
+  shuRuleId         Int       @map("shu_rule_id")
+  userId            String    @map("user_id") @db.Uuid
+  
+  // Kontribusi
+  totalSimpanan     Decimal   @map("total_simpanan") @db.Decimal(15, 2)
+  totalKontribusiBunga Decimal @map("total_kontribusi_bunga") @db.Decimal(15, 2) // dari biaya admin pinjaman
+  
+  // Pembagian
+  shuJasaSimpanan   Decimal   @map("shu_jasa_simpanan") @db.Decimal(15, 2)
+  shuJasaPinjaman   Decimal   @map("shu_jasa_pinjaman") @db.Decimal(15, 2)
+  totalSHUDiterima  Decimal   @map("total_shu_diterima") @db.Decimal(15, 2)
+  
+  // Disbursement
+  isDisbursed       Boolean   @default(false) @map("is_disbursed")
+  disbursedAt       DateTime? @map("disbursed_at")
+  slipPdfUrl        String?   @map("slip_pdf_url") @db.Text
+  
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  shuRule SHURule @relation(fields: [shuRuleId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([shuRuleId, userId])
+  @@map("shu_per_anggota")
+}
