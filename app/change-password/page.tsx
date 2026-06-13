@@ -1,105 +1,69 @@
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
+import { ChangePasswordForm } from "./ChangePasswordForm";
 
-export type CurrentUser = {
-  id: string;
-  authId: string;
-  nik: string;
-  nama: string;
-  email: string;
-  role: "ANGGOTA" | "SEKRETARIS" | "BENDAHARA" | "KETUA" | "SUPERADMIN";
-  mustChangePassword: boolean;
-  isActive: boolean;
-};
-
-/**
- * Get current logged-in user dari Supabase Auth + database users
- * Pakai di Server Components & Server Actions
- */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const supabase = createClient();
-
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) {
-    return null;
-  }
-
-  const dbUserId = authUser.user_metadata?.db_user_id;
-  if (!dbUserId) {
-    return null;
-  }
-
-  // Ambil data user lengkap dari tabel users
-  const serviceClient = createServiceClient();
-  const { data: dbUser, error } = await serviceClient
-    .from("users")
-    .select("id, nik, nama, email, role, must_change_password, is_active")
-    .eq("id", dbUserId)
-    .single();
-
-  if (error || !dbUser) {
-    return null;
-  }
-
-  return {
-    id: dbUser.id,
-    authId: authUser.id,
-    nik: dbUser.nik,
-    nama: dbUser.nama,
-    email: dbUser.email,
-    role: dbUser.role,
-    mustChangePassword: dbUser.must_change_password,
-    isActive: dbUser.is_active,
-  };
-}
-
-/**
- * Require user to be logged in
- * Redirect ke /login kalau belum auth
- */
-export async function requireAuth(): Promise<CurrentUser> {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  if (!user.isActive) {
-    redirect("/login?error=inactive");
-  }
-
-  return user;
-}
-
-/**
- * Require user to have changed password
- * Redirect ke /change-password kalau masih default
- */
-export async function requirePasswordChanged(): Promise<CurrentUser> {
+export default async function ChangePasswordPage() {
   const user = await requireAuth();
 
-  if (user.mustChangePassword) {
-    redirect("/change-password");
+  // Kalau sudah ganti password, redirect ke dashboard
+  if (!user.mustChangePassword) {
+    redirect("/dashboard");
   }
 
-  return user;
-}
+  return (
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 p-4">
+      <div className="w-full max-w-md">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/20 backdrop-blur-md text-5xl mb-4 border border-white/30">
+            🔐
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-1">
+            Ganti Password
+          </h1>
+          <p className="text-orange-100 text-sm">
+            Login pertama - wajib ganti password default
+          </p>
+        </div>
 
-/**
- * Require specific role(s)
- * Redirect ke /dashboard kalau role tidak match
- */
-export async function requireRole(
-  allowedRoles: CurrentUser["role"][]
-): Promise<CurrentUser> {
-  const user = await requirePasswordChanged();
+        {/* Welcome Card */}
+        <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-4 mb-4 text-white">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">👋</span>
+            <div>
+              <p className="font-semibold">Halo, {user.nama}!</p>
+              <p className="text-sm opacity-90">
+                Demi keamanan akun Anda, silakan ganti password default ke
+                password yang lebih kuat.
+              </p>
+            </div>
+          </div>
+        </div>
 
-  if (!allowedRoles.includes(user.role)) {
-    redirect("/dashboard?error=forbidden");
-  }
+        {/* Form Card */}
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
+          <h2 className="text-xl font-bold text-slate-800 mb-1">
+            Buat Password Baru
+          </h2>
+          <p className="text-sm text-slate-500 mb-6">
+            Password harus minimal 8 karakter, mengandung huruf besar dan angka
+          </p>
 
-  return user;
+          <ChangePasswordForm />
+
+          <div className="mt-6 pt-6 border-t border-slate-200">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-xs text-amber-800">
+                <strong>💡 Tips Password Aman:</strong>
+                <br />• Minimal 8 karakter
+                <br />• Kombinasi huruf besar (A-Z) & angka (0-9)
+                <br />• Hindari tanggal lahir atau NIK
+                <br />• Jangan share ke siapapun
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 }
