@@ -1,0 +1,21 @@
+name: Prisma Migrate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'prisma/schema.prisma'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - run: npm install -g prisma
+      - run: npx prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
