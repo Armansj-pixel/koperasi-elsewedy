@@ -11,31 +11,41 @@ import { z } from "zod";
 // =====================================================================
 
 const AnggotaSchema = z.object({
-  nik: z.string().min(6).max(20).regex(/^\d+$/, "NIK harus berupa angka"),
-  nama: z.string().min(3).max(100),
-  email: z.string().email(),
-  no_hp: z.string().optional(),
-  no_rekening: z.string().optional(),
-  nama_bank: z.string().optional(),
-  role: z.enum(["ANGGOTA", "SEKRETARIS", "BENDAHARA", "KETUA", "SUPERADMIN"]),
+  nik: z
+    .string()
+    .min(6, "NIK minimal 6 digit")
+    .max(20, "NIK maksimal 20 digit")
+    .regex(/^\d+$/, "NIK harus berupa angka"),
+  nama: z.string().min(3, "Nama minimal 3 karakter").max(100),
+  email: z.string().email("Format email tidak valid").optional().or(z.literal("")),
+  no_hp: z.string().optional().or(z.literal("")),
+  no_rekening: z.string().optional().or(z.literal("")),
+  nama_bank: z.string().optional().or(z.literal("")),
+  nama_bank_custom: z.string().optional().or(z.literal("")),
+  role: z.enum(["ANGGOTA", "SEKRETARIS", "BENDAHARA", "KETUA", "SUPERADMIN"], {
+    errorMap: () => ({ message: "Role tidak valid" }),
+  }),
   simpanan_bulanan: z.coerce.number().min(0).default(0),
-  tanggal_bergabung: z.string().optional(),
+  tanggal_bergabung: z.string().optional().or(z.literal("")),
 });
+
 // =====================================================================
 // GET ALL ANGGOTA
 // =====================================================================
 
 export async function getAnggotaList(search?: string) {
-  const user = await requireRole(["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"]);
+  await requireRole(["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"]);
   const supabase = createServiceClient();
 
   let query = supabase
     .from("users")
-    .select("id, nik, nama, email, no_hp, role, simpanan_bulanan, tanggal_bergabung, is_active, last_login_at, created_at")
+    .select(
+      "id, nik, nama, email, no_hp, role, simpanan_bulanan, tanggal_bergabung, is_active, last_login_at, created_at"
+    )
     .order("nama", { ascending: true });
 
   if (search) {
-    query = query.or(`nik.ilike.%${search}%,nama.ilike.%${search}%,email.ilike.%${search}%`);
+    query = query.or(`nik.ilike.%${search}%,nama.ilike.%${search}%`);
   }
 
   const { data, error } = await query;
@@ -66,7 +76,9 @@ export async function getAnggotaById(id: string) {
   }
 
   return { success: true, data };
-}// =====================================================================
+}
+
+// =====================================================================
 // TAMBAH ANGGOTA BARU
 // =====================================================================
 
@@ -74,24 +86,45 @@ export async function tambahAnggota(formData: FormData) {
   await requireRole(["SUPERADMIN", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
-  const raw = {
-    nik: formData.get("nik") as string,
-    nama: formData.get("nama") as string,
-    email: formData.get("email") as string,
-    no_hp: formData.get("no_hp") as string,
-    no_rekening: formData.get("no_rekening") as string,
-    nama_bank: formData.get("nama_bank") as string,
-    role: formData.get("role") as string,
-    simpanan_bulanan: formData.get("simpanan_bulanan") as string,
-    tanggal_bergabung: formData.get("tanggal_bergabung") as string,
-  };
+  // Safely get form values (handle null)
+  const namaBankSelect = (formData.get("nama_bank") as string)?.trim() || "";
+  const namaBankCustom = (formData.get("nama_bank_custom") as string)?.trim() || "";
 
-  // Validasi
-  const parsed = AnggotaSchema.safeParse(raw);
-  if (!parsed.success) {
+  // Kalau pilih "Lainnya", wajib isi nama bank custom
+  if (namaBankSelect === "Lainnya" && !namaBankCustom) {
     return {
       success: false,
-      error: parsed.error.errors[0].message,
+      error: "Nama bank wajib diisi jika memilih 'Lainnya'",
+    };
+  }
+
+  // Tentukan nama bank final
+  const namaBankFinal =
+    namaBankSelect === "Lainnya" ? namaBankCustom : namaBankSelect;
+
+  const emailInput = (formData.get("email") as string)?.trim() || "";
+
+  const raw = {
+    nik: (formData.get("nik") as string)?.trim() || "",
+    nama: (formData.get("nama") as string)?.trim() || "",
+    email: emailInput,
+    no_hp: (formData.get("no_hp") as string)?.trim() || "",
+    no_rekening: (formData.get("no_rekening") as string)?.trim() || "",
+    nama_bank: namaBankFinal,
+    nama_bank_custom: namaBankCustom,
+    role: (formData.get("role") as string)?.trim() || "ANGGOTA",
+    simpanan_bulanan: (formData.get("simpanan_bulanan") as string) || "0",
+    tanggal_bergabung:
+      (formData.get("tanggal_bergabung") as string)?.trim() || "",
+  };
+
+  // Validasi schema
+  const parsed = AnggotaSchema.safeParse(raw);
+  if (!parsed.success) {
+    const firstError = parsed.error.errors[0];
+    return {
+      success: false,
+      error: `${firstError.message}`,
     };
   }
 
@@ -102,16 +135,19 @@ export async function tambahAnggota(formData: FormData) {
     .from("users")
     .select("id")
     .eq("nik", data.nik)
-    .single();
+    .maybeSingle();
 
   if (existing) {
-    return { success: false, error: "NIK sudah terdaftar" };
+    return { success: false, error: "NIK sudah terdaftar di sistem" };
   }
 
   // Password default = 4 digit terakhir NIK
   const defaultPassword = data.nik.slice(-4);
   const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+  // Email: pakai email Gmail user jika diisi, kalau tidak pakai virtual email
   const virtualEmail = `${data.nik}@koperasi.local`;
+  const emailFinal = emailInput !== "" ? emailInput : virtualEmail;
 
   // Insert ke tabel users
   const { data: newUser, error: insertError } = await supabase
@@ -119,18 +155,20 @@ export async function tambahAnggota(formData: FormData) {
     .insert({
       nik: data.nik,
       nama: data.nama,
-      email: virtualEmail,
+      email: emailFinal,
       no_hp: data.no_hp || null,
       no_rekening: data.no_rekening || null,
-      nama_bank: data.nama_bank || null,
+      nama_bank: namaBankFinal || null,
       password_hash: passwordHash,
       must_change_password: true,
       role: data.role,
       simpanan_bulanan: data.simpanan_bulanan,
-      tanggal_bergabung: data.tanggal_bergabung || new Date().toISOString().split("T")[0],
+      tanggal_bergabung:
+        data.tanggal_bergabung ||
+        new Date().toISOString().split("T")[0],
       is_active: true,
     })
-    .select("id, nik, nama")
+    .select("id, nik, nama, role")
     .single();
 
   if (insertError) {
@@ -143,6 +181,7 @@ export async function tambahAnggota(formData: FormData) {
     .insert({ user_id: newUser.id, total_saldo: 0 });
 
   // Auto-create Supabase Auth user
+  // Selalu pakai virtual email untuk auth (supaya login NIK tetap bekerja)
   const { error: authError } = await supabase.auth.admin.createUser({
     email: virtualEmail,
     password: defaultPassword,
@@ -156,14 +195,14 @@ export async function tambahAnggota(formData: FormData) {
   });
 
   if (authError) {
-    console.error("Auth user creation error:", authError);
+    console.error("Auth user creation error:", authError.message);
   }
 
   revalidatePath("/dashboard/anggota");
 
   return {
     success: true,
-    message: `Anggota ${data.nama} berhasil ditambahkan. Password default: ${defaultPassword}`,
+    message: `✅ ${data.nama} berhasil ditambahkan! Password default: ${defaultPassword}`,
     data: newUser,
   };
 }
@@ -176,21 +215,40 @@ export async function editAnggota(id: string, formData: FormData) {
   await requireRole(["SUPERADMIN", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
+  const namaBankSelect = (formData.get("nama_bank") as string)?.trim() || "";
+  const namaBankCustom =
+    (formData.get("nama_bank_custom") as string)?.trim() || "";
+
+  if (namaBankSelect === "Lainnya" && !namaBankCustom) {
+    return {
+      success: false,
+      error: "Nama bank wajib diisi jika memilih 'Lainnya'",
+    };
+  }
+
+  const namaBankFinal =
+    namaBankSelect === "Lainnya" ? namaBankCustom : namaBankSelect;
+
   const raw = {
-    nik: formData.get("nik") as string,
-    nama: formData.get("nama") as string,
-    email: formData.get("email") as string,
-    no_hp: formData.get("no_hp") as string,
-    no_rekening: formData.get("no_rekening") as string,
-    nama_bank: formData.get("nama_bank") as string,
-    role: formData.get("role") as string,
-    simpanan_bulanan: formData.get("simpanan_bulanan") as string,
-    tanggal_bergabung: formData.get("tanggal_bergabung") as string,
+    nik: (formData.get("nik") as string)?.trim() || "",
+    nama: (formData.get("nama") as string)?.trim() || "",
+    email: (formData.get("email") as string)?.trim() || "",
+    no_hp: (formData.get("no_hp") as string)?.trim() || "",
+    no_rekening: (formData.get("no_rekening") as string)?.trim() || "",
+    nama_bank: namaBankFinal,
+    nama_bank_custom: namaBankCustom,
+    role: (formData.get("role") as string)?.trim() || "ANGGOTA",
+    simpanan_bulanan: (formData.get("simpanan_bulanan") as string) || "0",
+    tanggal_bergabung:
+      (formData.get("tanggal_bergabung") as string)?.trim() || "",
   };
 
   const parsed = AnggotaSchema.safeParse(raw);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.errors[0].message };
+    return {
+      success: false,
+      error: parsed.error.errors[0].message,
+    };
   }
 
   const data = parsed.data;
@@ -201,10 +259,10 @@ export async function editAnggota(id: string, formData: FormData) {
       nama: data.nama,
       no_hp: data.no_hp || null,
       no_rekening: data.no_rekening || null,
-      nama_bank: data.nama_bank || null,
+      nama_bank: namaBankFinal || null,
       role: data.role,
       simpanan_bulanan: data.simpanan_bulanan,
-      tanggal_bergabung: data.tanggal_bergabung,
+      tanggal_bergabung: data.tanggal_bergabung || null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -218,6 +276,7 @@ export async function editAnggota(id: string, formData: FormData) {
 
   return { success: true, message: "Data anggota berhasil diupdate" };
 }
+
 // =====================================================================
 // TOGGLE AKTIF / NONAKTIF
 // =====================================================================
@@ -228,7 +287,10 @@ export async function toggleAnggotaStatus(id: string, isActive: boolean) {
 
   const { error } = await supabase
     .from("users")
-    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .update({
+      is_active: isActive,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id);
 
   if (error) {
@@ -251,7 +313,6 @@ export async function resetPasswordAnggota(id: string) {
   await requireRole(["SUPERADMIN"]);
   const supabase = createServiceClient();
 
-  // Ambil NIK user
   const { data: user } = await supabase
     .from("users")
     .select("id, nik, nama")
@@ -262,12 +323,10 @@ export async function resetPasswordAnggota(id: string) {
     return { success: false, error: "Anggota tidak ditemukan" };
   }
 
-  // Password baru = 4 digit terakhir NIK
   const newPassword = user.nik.slice(-4);
   const passwordHash = await bcrypt.hash(newPassword, 10);
   const virtualEmail = `${user.nik}@koperasi.local`;
 
-  // Update di tabel users
   await supabase
     .from("users")
     .update({
@@ -277,7 +336,6 @@ export async function resetPasswordAnggota(id: string) {
     })
     .eq("id", id);
 
-  // Update di Supabase Auth
   const { data: authUsers } = await supabase.auth.admin.listUsers();
   const authUser = authUsers?.users.find((u) => u.email === virtualEmail);
 
@@ -291,8 +349,6 @@ export async function resetPasswordAnggota(id: string) {
 
   return {
     success: true,
-    message: `Password ${user.nama} berhasil direset ke: ${newPassword}`,
+    message: `Password ${user.nama} berhasil direset. Password baru: ${newPassword}`,
   };
 }
-
-
