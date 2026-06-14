@@ -11,8 +11,8 @@ import { z } from "zod";
 
 const SetoranSchema = z.object({
   user_id: z.string().uuid("User tidak valid"),
-  jumlah: z.coerce.number().min(1000, "Minimal setoran Rp 1.000"),
-  jenis: z.enum([
+  nominal: z.coerce.number().min(1000, "Minimal setoran Rp 1.000"),
+  jenis_simpanan: z.enum([
     "SIMPANAN_POKOK",
     "SIMPANAN_WAJIB",
     "SIMPANAN_SUKARELA",
@@ -22,18 +22,29 @@ const SetoranSchema = z.object({
 });
 
 const PenarikanSchema = z.object({
-  jumlah: z.coerce
-    .number()
-    .min(10000, "Minimal penarikan Rp 10.000"),
-  keterangan: z.string().optional().or(z.literal("")),
+  nominal: z.coerce.number().min(10000, "Minimal penarikan Rp 10.000"),
+  catatan: z.string().optional().or(z.literal("")),
 });
 
 // =====================================================================
-// GET SEMUA SALDO SIMPANAN (untuk Bendahara/Admin)
+// HELPER: Format periode "YYYY-MM"
+// =====================================================================
+
+function formatPeriode(tanggal: string): string {
+  const d = new Date(tanggal);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+// =====================================================================
+// GET SEMUA SALDO SIMPANAN
 // =====================================================================
 
 export async function getAllSaldoSimpanan(search?: string) {
-  await requireRole(["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"]);
+  await requireRole([
+    "SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA",
+  ]);
   const supabase = createServiceClient();
 
   let query = supabase
@@ -46,27 +57,28 @@ export async function getAllSaldoSimpanan(search?: string) {
     .order("nama", { ascending: true });
 
   if (search) {
-    query = query.or(`nik.ilike.%${search}%,nama.ilike.%${search}%`);
+    query = query.or(
+      `nik.ilike.%${search}%,nama.ilike.%${search}%`
+    );
   }
 
   const { data, error } = await query;
-
   if (error) {
     return { success: false, error: error.message, data: [] };
   }
-
   return { success: true, data: data || [] };
 }
 
 // =====================================================================
-// GET SALDO SIMPANAN PER ANGGOTA
+// GET SALDO PER ANGGOTA
 // =====================================================================
 
 export async function getSaldoByUserId(userId: string) {
-  await requireRole(["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA", "ANGGOTA"]);
+  await requireRole([
+    "SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA", "ANGGOTA",
+  ]);
   const supabase = createServiceClient();
 
-  // Ambil saldo
   const { data: saldo, error: saldoError } = await supabase
     .from("saldo_simpanan")
     .select("*")
@@ -77,7 +89,6 @@ export async function getSaldoByUserId(userId: string) {
     return { success: false, error: saldoError.message, data: null };
   }
 
-  // Ambil data user
   const { data: user } = await supabase
     .from("users")
     .select("id, nik, nama, simpanan_bulanan")
@@ -95,35 +106,23 @@ export async function getRiwayatSimpanan(
   userId: string,
   limit: number = 20
 ) {
-  await requireRole(["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA", "ANGGOTA"]);
+  await requireRole([
+    "SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA", "ANGGOTA",
+  ]);
   const supabase = createServiceClient();
 
   const { data, error } = await supabase
     .from("simpanan")
     .select(
-      `id, jenis, jumlah, keterangan, tanggal, created_at,
-       users!simpanan_created_by_fkey(nama)`
+      "id, jenis, nominal, periode, keterangan, tanggal, status, created_at"
     )
     .eq("user_id", userId)
     .order("tanggal", { ascending: false })
     .limit(limit);
 
   if (error) {
-    // Coba tanpa join kalau ada error FK
-    const { data: data2, error: error2 } = await supabase
-      .from("simpanan")
-      .select("id, jenis, jumlah, keterangan, tanggal, created_at")
-      .eq("user_id", userId)
-      .order("tanggal", { ascending: false })
-      .limit(limit);
-
-    if (error2) {
-      return { success: false, error: error2.message, data: [] };
-    }
-
-    return { success: true, data: data2 || [] };
+    return { success: false, error: error.message, data: [] };
   }
-
   return { success: true, data: data || [] };
 }
 
@@ -137,10 +136,13 @@ export async function inputSetoran(formData: FormData) {
 
   const raw = {
     user_id: (formData.get("user_id") as string)?.trim() || "",
-    jumlah: (formData.get("jumlah") as string) || "0",
-    jenis: (formData.get("jenis") as string)?.trim() || "SIMPANAN_WAJIB",
-    keterangan: (formData.get("keterangan") as string)?.trim() || "",
-    tanggal: (formData.get("tanggal") as string)?.trim() || "",
+    nominal: (formData.get("jumlah") as string) || "0",
+    jenis_simpanan:
+      (formData.get("jenis") as string)?.trim() || "SIMPANAN_WAJIB",
+    keterangan:
+      (formData.get("keterangan") as string)?.trim() || "",
+    tanggal:
+      (formData.get("tanggal") as string)?.trim() || "",
   };
 
   const parsed = SetoranSchema.safeParse(raw);
@@ -154,6 +156,14 @@ export async function inputSetoran(formData: FormData) {
   const data = parsed.data;
   const tanggalFinal =
     data.tanggal || new Date().toISOString().split("T")[0];
+  const periodeFinal = formatPeriode(tanggalFinal);
+
+  // Label keterangan berdasarkan jenis simpanan
+  const keteranganLabel: Record<string, string> = {
+    SIMPANAN_POKOK: "Simpanan pokok",
+    SIMPANAN_WAJIB: "Simpanan wajib bulanan",
+    SIMPANAN_SUKARELA: "Simpanan sukarela",
+  };
 
   // Cek user exists
   const { data: user } = await supabase
@@ -166,18 +176,21 @@ export async function inputSetoran(formData: FormData) {
     return { success: false, error: "Anggota tidak ditemukan" };
   }
 
-  // Insert mutasi simpanan
+  // Insert ke tabel simpanan
+  // jenis = SETORAN (enum valid)
+  // jenis_simpanan disimpan di keterangan
   const { error: insertError } = await supabase
     .from("simpanan")
     .insert({
       user_id: data.user_id,
-      jenis: data.jenis,
-      jumlah: data.jumlah,
-      tipe: "KREDIT",
+      jenis: "SETORAN",
+      nominal: data.nominal,
+      periode: periodeFinal,
+      tanggal: tanggalFinal,
+      status: "APPROVED",
       keterangan:
         data.keterangan ||
-        `Setoran ${data.jenis.replace(/_/g, " ").toLowerCase()}`,
-      tanggal: tanggalFinal,
+        keteranganLabel[data.jenis_simpanan],
       created_by: currentUser.id,
     });
 
@@ -185,21 +198,22 @@ export async function inputSetoran(formData: FormData) {
     return { success: false, error: insertError.message };
   }
 
-  // Update saldo di tabel saldo_simpanan
+  // Update saldo_simpanan
   const { data: saldoNow } = await supabase
     .from("saldo_simpanan")
     .select("total_saldo")
     .eq("user_id", data.user_id)
     .single();
 
-  const saldoBaru = Number(saldoNow?.total_saldo || 0) + data.jumlah;
+  const saldoBaru =
+    Number(saldoNow?.total_saldo || 0) + data.nominal;
 
   const { error: updateError } = await supabase
     .from("saldo_simpanan")
     .upsert({
       user_id: data.user_id,
       total_saldo: saldoBaru,
-      updated_at: new Date().toISOString(),
+      last_updated: new Date().toISOString(),
     });
 
   if (updateError) {
@@ -211,12 +225,13 @@ export async function inputSetoran(formData: FormData) {
 
   return {
     success: true,
-    message: `✅ Setoran Rp ${data.jumlah.toLocaleString("id-ID")} untuk ${user.nama} berhasil dicatat!`,
+    message: `✅ Setoran Rp ${data.nominal.toLocaleString(
+      "id-ID"
+    )} untuk ${user.nama} berhasil dicatat!`,
   };
 }
-
 // =====================================================================
-// INPUT SETORAN BULANAN MASSAL (Tanggal 25 / by Bendahara)
+// SETORAN BULANAN MASSAL (by Bendahara)
 // =====================================================================
 
 export async function inputSetoranBulananMassal(
@@ -226,7 +241,7 @@ export async function inputSetoranBulananMassal(
   const currentUser = await requireRole(["SUPERADMIN", "BENDAHARA"]);
   const supabase = createServiceClient();
 
-  // Ambil semua anggota aktif yang punya simpanan bulanan
+  // Ambil semua anggota aktif
   const { data: anggotaList, error } = await supabase
     .from("users")
     .select("id, nama, nik, simpanan_bulanan")
@@ -238,22 +253,24 @@ export async function inputSetoranBulananMassal(
   }
 
   const tanggal = `${tahun}-${String(bulan).padStart(2, "0")}-25`;
-  const namaBulan = new Date(tahun, bulan - 1).toLocaleString("id-ID", {
-    month: "long",
-    year: "numeric",
-  });
+  const periode = `${tahun}-${String(bulan).padStart(2, "0")}`;
+  const namaBulan = new Date(tahun, bulan - 1).toLocaleString(
+    "id-ID",
+    { month: "long", year: "numeric" }
+  );
 
   let berhasil = 0;
   let gagal = 0;
 
   for (const anggota of anggotaList) {
-    // Cek apakah bulan ini sudah di-input
+    // Cek apakah periode ini sudah di-input
     const { data: existing } = await supabase
       .from("simpanan")
       .select("id")
       .eq("user_id", anggota.id)
-      .eq("jenis", "SIMPANAN_WAJIB")
-      .eq("tanggal", tanggal)
+      .eq("jenis", "SETORAN")
+      .eq("periode", periode)
+      .ilike("keterangan", "%simpanan wajib bulanan%")
       .maybeSingle();
 
     if (existing) {
@@ -265,15 +282,20 @@ export async function inputSetoranBulananMassal(
       .from("simpanan")
       .insert({
         user_id: anggota.id,
-        jenis: "SIMPANAN_WAJIB",
-        jumlah: anggota.simpanan_bulanan,
-        tipe: "KREDIT",
-        keterangan: `Simpanan wajib bulanan ${namaBulan}`,
+        jenis: "SETORAN",
+        nominal: anggota.simpanan_bulanan,
+        periode,
         tanggal,
+        status: "APPROVED",
+        keterangan: `Simpanan wajib bulanan ${namaBulan}`,
         created_by: currentUser.id,
       });
 
     if (insertError) {
+      console.error(
+        `Gagal insert ${anggota.nik}:`,
+        insertError.message
+      );
       gagal++;
       continue;
     }
@@ -290,7 +312,7 @@ export async function inputSetoranBulananMassal(
       total_saldo:
         Number(saldoNow?.total_saldo || 0) +
         Number(anggota.simpanan_bulanan),
-      updated_at: new Date().toISOString(),
+      last_updated: new Date().toISOString(),
     });
 
     berhasil++;
@@ -300,28 +322,26 @@ export async function inputSetoranBulananMassal(
 
   return {
     success: true,
-    message: `✅ Setoran bulanan ${namaBulan} selesai! ${berhasil} anggota berhasil, ${gagal} gagal.`,
+    message: `✅ Setoran ${namaBulan} selesai! ${berhasil} berhasil, ${gagal} gagal.`,
     berhasil,
     gagal,
   };
 }
+
 // =====================================================================
 // PENGAJUAN PENARIKAN (by Anggota)
 // =====================================================================
 
 export async function ajukanPenarikan(formData: FormData) {
   const currentUser = await requireRole([
-    "ANGGOTA",
-    "SEKRETARIS",
-    "BENDAHARA",
-    "KETUA",
-    "SUPERADMIN",
+    "ANGGOTA", "SEKRETARIS", "BENDAHARA", "KETUA", "SUPERADMIN",
   ]);
   const supabase = createServiceClient();
 
   const raw = {
-    jumlah: (formData.get("jumlah") as string) || "0",
-    keterangan: (formData.get("keterangan") as string)?.trim() || "",
+    nominal: (formData.get("nominal") as string) || "0",
+    catatan:
+      (formData.get("catatan") as string)?.trim() || "",
   };
 
   const parsed = PenarikanSchema.safeParse(raw);
@@ -339,23 +359,28 @@ export async function ajukanPenarikan(formData: FormData) {
     .eq("user_id", currentUser.id)
     .single();
 
-  if (!saldo || Number(saldo.total_saldo) < parsed.data.jumlah) {
+  if (
+    !saldo ||
+    Number(saldo.total_saldo) < parsed.data.nominal
+  ) {
     return {
       success: false,
-      error: `Saldo tidak mencukupi. Saldo Anda: Rp ${Number(saldo?.total_saldo || 0).toLocaleString("id-ID")}`,
+      error: `Saldo tidak mencukupi. Saldo Anda: Rp ${Number(
+        saldo?.total_saldo || 0
+      ).toLocaleString("id-ID")}`,
     };
   }
 
-  // Insert pengajuan penarikan
+  // Insert pengajuan
   const { error } = await supabase
     .from("penarikan_simpanan")
     .insert({
       user_id: currentUser.id,
-      jumlah: parsed.data.jumlah,
-      keterangan:
-        parsed.data.keterangan || "Pengajuan penarikan simpanan",
+      nominal: parsed.data.nominal,
+      catatan:
+        parsed.data.catatan || "Pengajuan penarikan simpanan",
       status: "PENDING",
-      tanggal_pengajuan: new Date().toISOString().split("T")[0],
+      tanggal_pengajuan: new Date().toISOString(),
     });
 
   if (error) {
@@ -366,7 +391,9 @@ export async function ajukanPenarikan(formData: FormData) {
 
   return {
     success: true,
-    message: `✅ Pengajuan penarikan Rp ${parsed.data.jumlah.toLocaleString("id-ID")} berhasil diajukan! Menunggu persetujuan Bendahara.`,
+    message: `✅ Pengajuan penarikan Rp ${parsed.data.nominal.toLocaleString(
+      "id-ID"
+    )} berhasil! Menunggu persetujuan Bendahara.`,
   };
 }
 
@@ -380,8 +407,7 @@ export async function updateStatusPenarikan(
   catatan?: string
 ) {
   const currentUser = await requireRole([
-    "SUPERADMIN",
-    "BENDAHARA",
+    "SUPERADMIN", "BENDAHARA",
   ]);
   const supabase = createServiceClient();
 
@@ -393,7 +419,10 @@ export async function updateStatusPenarikan(
     .single();
 
   if (!penarikan) {
-    return { success: false, error: "Data penarikan tidak ditemukan" };
+    return {
+      success: false,
+      error: "Data penarikan tidak ditemukan",
+    };
   }
 
   if (penarikan.status !== "PENDING") {
@@ -403,22 +432,31 @@ export async function updateStatusPenarikan(
     };
   }
 
-  // Update status
+  // Siapkan data update
+  const updateData: any = {
+    status,
+    approved_by: currentUser.id,
+    approved_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (status === "REJECTED") {
+    updateData.rejected_reason =
+      catatan || "Ditolak oleh Bendahara";
+  } else {
+    updateData.catatan = catatan || null;
+  }
+
   const { error: updateError } = await supabase
     .from("penarikan_simpanan")
-    .update({
-      status,
-      catatan_bendahara: catatan || null,
-      tanggal_diproses: new Date().toISOString().split("T")[0],
-      diproses_oleh: currentUser.id,
-    })
+    .update(updateData)
     .eq("id", penarikanId);
 
   if (updateError) {
     return { success: false, error: updateError.message };
   }
 
-  // Kalau APPROVED, kurangi saldo
+  // Kalau APPROVED → kurangi saldo & catat mutasi
   if (status === "APPROVED") {
     const { data: saldo } = await supabase
       .from("saldo_simpanan")
@@ -427,7 +465,8 @@ export async function updateStatusPenarikan(
       .single();
 
     const saldoBaru =
-      Number(saldo?.total_saldo || 0) - Number(penarikan.jumlah);
+      Number(saldo?.total_saldo || 0) -
+      Number(penarikan.nominal);
 
     if (saldoBaru < 0) {
       return {
@@ -437,21 +476,27 @@ export async function updateStatusPenarikan(
     }
 
     // Update saldo
-    await supabase.from("saldo_simpanan").update({
-      total_saldo: saldoBaru,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", penarikan.user_id);
+    await supabase
+      .from("saldo_simpanan")
+      .update({
+        total_saldo: saldoBaru,
+        last_updated: new Date().toISOString(),
+      })
+      .eq("user_id", penarikan.user_id);
 
-    // Insert mutasi debit
+    // Catat mutasi PENARIKAN di tabel simpanan
     await supabase.from("simpanan").insert({
       user_id: penarikan.user_id,
-      jenis: "SIMPANAN_SUKARELA",
-      jumlah: penarikan.jumlah,
-      tipe: "DEBIT",
-      keterangan: `Penarikan simpanan - disetujui`,
+      jenis: "PENARIKAN",
+      nominal: penarikan.nominal,
+      periode: formatPeriode(
+        new Date().toISOString().split("T")[0]
+      ),
       tanggal: new Date().toISOString().split("T")[0],
+      status: "APPROVED",
+      keterangan: "Penarikan simpanan - disetujui Bendahara",
       created_by: currentUser.id,
+      referensi_id: penarikanId,
     });
   }
 
@@ -478,9 +523,11 @@ export async function getListPenarikan(status?: string) {
   let query = supabase
     .from("penarikan_simpanan")
     .select(
-      `id, jumlah, keterangan, status, tanggal_pengajuan,
-       tanggal_diproses, catatan_bendahara,
-       users!penarikan_simpanan_user_id_fkey(id, nik, nama, no_rekening, nama_bank)`
+      `id, nominal, catatan, status, tanggal_pengajuan,
+       tanggal_pencairan, rejected_reason, approved_at,
+       users!penarikan_simpanan_user_id_fkey(
+         id, nik, nama, no_rekening, nama_bank
+       )`
     )
     .order("tanggal_pengajuan", { ascending: false });
 
@@ -489,10 +536,8 @@ export async function getListPenarikan(status?: string) {
   }
 
   const { data, error } = await query;
-
   if (error) {
     return { success: false, error: error.message, data: [] };
   }
-
   return { success: true, data: data || [] };
 }
