@@ -228,7 +228,7 @@ export default async function DetailAnggotaPage({
                   const result = await resetPasswordAnggota(params.id);
                   if (result.success) {
                     redirect(
-                      `/dashboard/anggota/${params.id}?msg=${encodeURIComponent(result.message)}`
+                      `/dashboard/anggota/${params.id}?msg=${encodeURIComponent(result.message?? "Berhasil")}`
                     );
                   } else {
                     redirect(
@@ -255,7 +255,7 @@ export default async function DetailAnggotaPage({
                   );
                   if (result.success) {
                     redirect(
-                      `/dashboard/anggota/${params.id}?msg=${encodeURIComponent(result.message)}`
+                      `/dashboard/anggota/${params.id}?msg=${encodeURIComponent(result.message?? "Berhasil")}`
                     );
                   } else {
                     redirect(
