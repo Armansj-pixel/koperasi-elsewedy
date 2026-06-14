@@ -12,7 +12,7 @@ export async function POST(request: Request) {
 
     const supabaseAdmin = createServiceClient();
 
-    // 1. Cari user Supabase Auth berdasarkan email virtual
+    // Cek user Supabase Auth lama
     const { data: authUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
     if (listError) {
       return NextResponse.json({ error: listError.message }, { status: 500 });
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
     const existingUser = authUsers.users.find((u) => u.email === `${nik}@koperasi.local`);
 
-    // 2. Hapus user lama kalau ada
+    // Hapus user lama jika ada
     if (existingUser) {
       const { error: delError } = await supabaseAdmin.auth.admin.deleteUser(existingUser.id);
       if (delError) {
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Buat user baru di Supabase Auth
+    // Buat user baru di Supabase Auth
     const { data, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: `${nik}@koperasi.local`,
       password,
