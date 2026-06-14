@@ -154,25 +154,25 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-2xl mx-auto">
               {[
-                { icon: "💰", label: "Simpanan" },
-                { icon: "💳", label: "Pinjaman" },
-                { icon: "✅", label: "Approval" },
-                { icon: "📊", label: "Laporan" },
-                { icon: "📒", label: "Kas Kecil" },
-                { icon: "📰", label: "Berita" },
-                { icon: "📚", label: "Akuntansi" },
-                { icon: "🎁", label: "SHU" },
-              ].map((item, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-xl p-3 border border-slate-200 hover:shadow-md transition"
-                >
-                  <div className="text-2xl mb-1">{item.icon}</div>
-                  <div className="text-xs font-semibold text-slate-700">
-                    {item.label}
-                  </div>
-                </div>
-              ))}
+  { icon: "👥", label: "Anggota", href: "/dashboard/anggota" },
+  { icon: "💰", label: "Simpanan", href: "#" },
+  { icon: "💳", label: "Pinjaman", href: "#" },
+  { icon: "✅", label: "Approval", href: "#" },
+  { icon: "📊", label: "Laporan", href: "#" },
+  { icon: "📒", label: "Kas Kecil", href: "#" },
+  { icon: "📰", label: "Berita", href: "#" },
+  { icon: "📚", label: "Akuntansi", href: "#" },
+].map((item, idx) => (
+  <a
+    key={idx}
+    href={item.href}
+    className="bg-white rounded-xl p-3 border border-slate-200 hover:shadow-md hover:border-blue-300 transition text-center"
+  >
+    <div className="text-2xl mb-1">{item.icon}</div>
+    <div className="text-xs font-semibold text-slate-700">{item.label}</div>
+  </a>
+))}
+
             </div>
 
             <div className="mt-6 inline-flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-600">
