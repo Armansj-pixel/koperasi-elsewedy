@@ -155,7 +155,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-2xl mx-auto">
               {[
   { icon: "👥", label: "Anggota", href: "/dashboard/anggota" },
-  { icon: "💰", label: "Simpanan", href: "#" },
+  { icon: "💰", label: "Simpanan", href: "/dashboard/simpanan" },
   { icon: "💳", label: "Pinjaman", href: "#" },
   { icon: "✅", label: "Approval", href: "#" },
   { icon: "📊", label: "Laporan", href: "#" },
