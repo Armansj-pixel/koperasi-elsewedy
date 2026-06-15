@@ -11,13 +11,9 @@ import { z } from "zod";
 // =====================================================================
 
 const AnggotaSchema = z.object({
-  nik: z
-    .string()
-    .min(6, "NIK minimal 6 digit")
-    .max(20, "NIK maksimal 20 digit")
-    .regex(/^\d+$/, "NIK harus berupa angka"),
+  nik: z.string().min(6, "NIK minimal 6 digit").max(20).regex(/^\d+$/, "NIK harus berupa angka"),
   nama: z.string().min(3, "Nama minimal 3 karakter").max(100),
-  email: z.string().email("Format email tidak valid").optional().or(z.literal("")),
+  email: z.string().optional().or(z.literal("")),
   no_hp: z.string().optional().or(z.literal("")),
   no_rekening: z.string().optional().or(z.literal("")),
   nama_bank: z.string().optional().or(z.literal("")),
@@ -45,16 +41,32 @@ export async function getAnggotaList(search?: string) {
     .order("nama", { ascending: true });
 
   if (search) {
-    query = query.or(`nik.ilike.%${search}%,nama.ilike.%${search}%`);
+    query = query.or(
+      `nik.ilike.%${search}%,nama.ilike.%${search}%,email.ilike.%${search}%`
+    );
   }
 
-  const { data, error } = await query;
+  const { data: users, error } = await query;
 
   if (error) {
     return { success: false, error: error.message, data: [] };
   }
 
-  return { success: true, data: data || [] };
+  // Ambil saldo terpisah (hindari join FK cache issue)
+  const { data: saldoList } = await supabase
+    .from("saldo_simpanan")
+    .select("user_id, total_saldo");
+
+  // Gabungkan manual
+  const data = (users || []).map((user: any) => {
+    const saldo = saldoList?.find((s) => s.user_id === user.id);
+    return {
+      ...user,
+      total_saldo: Number(saldo?.total_saldo || 0),
+    };
+  });
+
+  return { success: true, data };
 }
 
 // =====================================================================
@@ -65,9 +77,9 @@ export async function getAnggotaById(id: string) {
   await requireRole(["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"]);
   const supabase = createServiceClient();
 
-  const { data, error } = await supabase
+  const { data: user, error } = await supabase
     .from("users")
-    .select("*, saldo_simpanan(total_saldo)")
+    .select("*")
     .eq("id", id)
     .single();
 
@@ -75,7 +87,21 @@ export async function getAnggotaById(id: string) {
     return { success: false, error: error.message, data: null };
   }
 
-  return { success: true, data };
+  // Ambil saldo terpisah
+  const { data: saldo } = await supabase
+    .from("saldo_simpanan")
+    .select("total_saldo, last_updated")
+    .eq("user_id", id)
+    .maybeSingle();
+
+  return {
+    success: true,
+    data: {
+      ...user,
+      total_saldo: Number(saldo?.total_saldo || 0),
+      saldo_simpanan: [{ total_saldo: saldo?.total_saldo || 0 }],
+    },
+  };
 }
 
 // =====================================================================
@@ -86,11 +112,11 @@ export async function tambahAnggota(formData: FormData) {
   await requireRole(["SUPERADMIN", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
-  // Safely get form values (handle null)
-  const namaBankSelect = (formData.get("nama_bank") as string)?.trim() || "";
-  const namaBankCustom = (formData.get("nama_bank_custom") as string)?.trim() || "";
+  const namaBankSelect =
+    (formData.get("nama_bank") as string)?.trim() || "";
+  const namaBankCustom =
+    (formData.get("nama_bank_custom") as string)?.trim() || "";
 
-  // Kalau pilih "Lainnya", wajib isi nama bank custom
   if (namaBankSelect === "Lainnya" && !namaBankCustom) {
     return {
       success: false,
@@ -98,33 +124,32 @@ export async function tambahAnggota(formData: FormData) {
     };
   }
 
-  // Tentukan nama bank final
   const namaBankFinal =
     namaBankSelect === "Lainnya" ? namaBankCustom : namaBankSelect;
-
-  const emailInput = (formData.get("email") as string)?.trim() || "";
+  const emailInput =
+    (formData.get("email") as string)?.trim() || "";
 
   const raw = {
     nik: (formData.get("nik") as string)?.trim() || "",
     nama: (formData.get("nama") as string)?.trim() || "",
     email: emailInput,
     no_hp: (formData.get("no_hp") as string)?.trim() || "",
-    no_rekening: (formData.get("no_rekening") as string)?.trim() || "",
+    no_rekening:
+      (formData.get("no_rekening") as string)?.trim() || "",
     nama_bank: namaBankFinal,
     nama_bank_custom: namaBankCustom,
     role: (formData.get("role") as string)?.trim() || "ANGGOTA",
-    simpanan_bulanan: (formData.get("simpanan_bulanan") as string) || "0",
+    simpanan_bulanan:
+      (formData.get("simpanan_bulanan") as string) || "0",
     tanggal_bergabung:
       (formData.get("tanggal_bergabung") as string)?.trim() || "",
   };
 
-  // Validasi schema
   const parsed = AnggotaSchema.safeParse(raw);
   if (!parsed.success) {
-    const firstError = parsed.error.errors[0];
     return {
       success: false,
-      error: `${firstError.message}`,
+      error: parsed.error.errors[0].message,
     };
   }
 
@@ -141,11 +166,8 @@ export async function tambahAnggota(formData: FormData) {
     return { success: false, error: "NIK sudah terdaftar di sistem" };
   }
 
-  // Password default = 4 digit terakhir NIK
   const defaultPassword = data.nik.slice(-4);
   const passwordHash = await bcrypt.hash(defaultPassword, 10);
-
-  // Email: pakai email Gmail user jika diisi, kalau tidak pakai virtual email
   const virtualEmail = `${data.nik}@koperasi.local`;
   const emailFinal = emailInput !== "" ? emailInput : virtualEmail;
 
@@ -176,12 +198,13 @@ export async function tambahAnggota(formData: FormData) {
   }
 
   // Auto-create saldo_simpanan
-  await supabase
-    .from("saldo_simpanan")
-    .insert({ user_id: newUser.id, total_saldo: 0 });
+  await supabase.from("saldo_simpanan").insert({
+    user_id: newUser.id,
+    total_saldo: 0,
+    last_updated: new Date().toISOString(),
+  });
 
   // Auto-create Supabase Auth user
-  // Selalu pakai virtual email untuk auth (supaya login NIK tetap bekerja)
   const { error: authError } = await supabase.auth.admin.createUser({
     email: virtualEmail,
     password: defaultPassword,
@@ -215,7 +238,8 @@ export async function editAnggota(id: string, formData: FormData) {
   await requireRole(["SUPERADMIN", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
-  const namaBankSelect = (formData.get("nama_bank") as string)?.trim() || "";
+  const namaBankSelect =
+    (formData.get("nama_bank") as string)?.trim() || "";
   const namaBankCustom =
     (formData.get("nama_bank_custom") as string)?.trim() || "";
 
@@ -234,11 +258,13 @@ export async function editAnggota(id: string, formData: FormData) {
     nama: (formData.get("nama") as string)?.trim() || "",
     email: (formData.get("email") as string)?.trim() || "",
     no_hp: (formData.get("no_hp") as string)?.trim() || "",
-    no_rekening: (formData.get("no_rekening") as string)?.trim() || "",
+    no_rekening:
+      (formData.get("no_rekening") as string)?.trim() || "",
     nama_bank: namaBankFinal,
     nama_bank_custom: namaBankCustom,
     role: (formData.get("role") as string)?.trim() || "ANGGOTA",
-    simpanan_bulanan: (formData.get("simpanan_bulanan") as string) || "0",
+    simpanan_bulanan:
+      (formData.get("simpanan_bulanan") as string) || "0",
     tanggal_bergabung:
       (formData.get("tanggal_bergabung") as string)?.trim() || "",
   };
@@ -281,7 +307,10 @@ export async function editAnggota(id: string, formData: FormData) {
 // TOGGLE AKTIF / NONAKTIF
 // =====================================================================
 
-export async function toggleAnggotaStatus(id: string, isActive: boolean) {
+export async function toggleAnggotaStatus(
+  id: string,
+  isActive: boolean
+) {
   await requireRole(["SUPERADMIN"]);
   const supabase = createServiceClient();
 
@@ -337,7 +366,9 @@ export async function resetPasswordAnggota(id: string) {
     .eq("id", id);
 
   const { data: authUsers } = await supabase.auth.admin.listUsers();
-  const authUser = authUsers?.users.find((u) => u.email === virtualEmail);
+  const authUser = authUsers?.users.find(
+    (u) => u.email === virtualEmail
+  );
 
   if (authUser) {
     await supabase.auth.admin.updateUserById(authUser.id, {
