@@ -1,3 +1,4 @@
+import React from "react";
 import { requireRole } from "@/lib/auth/session";
 import { getAllSaldoSimpanan } from "@/lib/simpanan/actions";
 import Link from "next/link";
@@ -25,72 +26,251 @@ export default async function SimpananPage({
   const canInput = ["SUPERADMIN", "BENDAHARA"].includes(currentUser.role);
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-4 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="text-slate-500 hover:text-slate-700 text-sm"
-            >
-              ← Dashboard
-            </Link>
-            <span className="text-slate-300">|</span>
-            <h1 className="font-bold text-slate-800">
-              💰 Modul Simpanan
-            </h1>
-          </div>
-          <div className="flex gap-2">
-            {canInput && (
-              <>
-                <Link
-                  href="/dashboard/simpanan/input"
-                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-semibold transition"
-                >
-                  ➕ Input Setoran
-                </Link>
-                <Link
-                  href="/dashboard/simpanan/penarikan"
-                  className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-semibold transition"
-                >
-                  📋 Penarikan
-                </Link>
-              </>
-            )}
+    <div style={{ backgroundColor: "#f1f5f9", minHeight: "100vh", paddingBottom: "40px" }}>
+      {/* --- Global & Design System Styles --- */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * {
+          box-sizing: border-box;
+          font-family: 'Inter', sans-serif;
+        }
+
+        .fintech-header {
+          position: relative;
+          background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%);
+          overflow: hidden;
+          padding: 24px 20px;
+          height: 240px;
+          border-bottom-left-radius: 24px;
+          border-bottom-right-radius: 24px;
+        }
+
+        /* Aturan wajib: pointer-events: none untuk elemen pseudo */
+        .fintech-header::before,
+        .fintech-header::after {
+          content: '';
+          position: absolute;
+          pointer-events: none; 
+          border-radius: 50%;
+        }
+
+        .fintech-header::before {
+          top: -40px;
+          left: -40px;
+          width: 150px;
+          height: 150px;
+          background: rgba(255, 255, 255, 0.08);
+        }
+
+        .fintech-header::after {
+          bottom: -20px;
+          right: -60px;
+          width: 200px;
+          height: 200px;
+          background: rgba(255, 255, 255, 0.05);
+        }
+
+        .card-fintech {
+          background: #fff;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 2px 12px rgba(15,45,107,.06);
+          padding: 24px;
+        }
+
+        .fintech-input {
+          width: 100%;
+          padding: 14px 16px 14px 44px;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+          font-size: 14px;
+          transition: all 0.2s ease;
+          background-color: #fff;
+          color: #1e293b;
+        }
+
+        .fintech-input:focus {
+          outline: none;
+          border-color: #2563eb;
+          box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+        }
+
+        .fintech-btn-header {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          background: #fff;
+          color: #1a4db3;
+          padding: 8px 16px;
+          border-radius: 20px;
+          text-decoration: none;
+          font-size: 13px;
+          font-weight: 600;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          transition: opacity 0.2s ease;
+        }
+
+        .fintech-btn-header:hover {
+          opacity: 0.9;
+        }
+
+        /* Table Styles */
+        .fintech-table {
+          width: 100%;
+          border-collapse: collapse;
+          text-align: left;
+        }
+
+        .fintech-table th {
+          padding: 16px;
+          font-size: 13px;
+          font-weight: 600;
+          color: #64748b;
+          border-bottom: 1px solid #e2e8f0;
+          background-color: #f8fafc;
+          white-space: nowrap;
+        }
+
+        .fintech-table td {
+          padding: 16px;
+          font-size: 14px;
+          color: #1e293b;
+          border-bottom: 1px solid #f1f5f9;
+        }
+
+        .fintech-table tr:last-child td {
+          border-bottom: none;
+        }
+
+        .fintech-table tbody tr:hover {
+          background-color: #f8fafc;
+        }
+
+        /* Responsive Grid Helper */
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        @media (max-width: 768px) {
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+          .hide-on-mobile {
+            display: none;
+          }
+        }
+      `}} />
+
+      {/* --- Header Area --- */}
+      <header className="fintech-header">
+        <div style={{ maxWidth: "1200px", margin: "0 auto", position: "relative", zIndex: 10 }}>
+          
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
+            
+            {/* Bagian Kiri: Navigasi & Judul */}
+            <div>
+              {/* Tombol Back: Transparan Putih */}
+              <Link 
+                href="/dashboard"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  background: "rgba(255, 255, 255, 0.2)",
+                  color: "#fff",
+                  padding: "8px 16px",
+                  borderRadius: "20px",
+                  textDecoration: "none",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                  backdropFilter: "blur(4px)",
+                  marginBottom: "20px"
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                Dashboard
+              </Link>
+
+              <h1 style={{ 
+                color: "#fff", 
+                margin: 0, 
+                fontSize: "28px", 
+                fontWeight: "700",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px"
+              }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" />
+                  <path d="M4 6v12c0 1.1.9 2 2 2h14v-4" />
+                  <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z" />
+                </svg>
+                Modul Simpanan
+              </h1>
+            </div>
+
+            {/* Bagian Kanan: Tombol Aksi Utama (Sesuai Aturan: Putih dengan text biru) */}
+            <div style={{ display: "flex", gap: "12px" }}>
+              {canInput && (
+                <>
+                  <Link href="/dashboard/simpanan/input" className="fintech-btn-header">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Input Setoran
+                  </Link>
+                  <Link href="/dashboard/simpanan/penarikan" className="fintech-btn-header" style={{ color: "#d97706" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    Penarikan
+                  </Link>
+                </>
+              )}
+            </div>
+
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-            <div className="text-2xl font-bold text-blue-600">
+      {/* --- Main Content Area --- */}
+      <main style={{ maxWidth: "1200px", margin: "-70px auto 0 auto", padding: "0 20px", position: "relative", zIndex: 20 }}>
+        
+        {/* Stats Grid */}
+        <div className="stats-grid">
+          <div className="card-fintech" style={{ padding: "20px", textAlign: "center" }}>
+            <div style={{ fontSize: "28px", fontWeight: "700", color: "#2563eb" }}>
               {anggotaList.length}
             </div>
-            <div className="text-xs text-slate-500 mt-1 font-semibold uppercase">
+            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               Total Anggota
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm md:col-span-2">
-            <div className="text-2xl font-bold text-green-600">
+          
+          {/* Box Total Saldo dibuat lebih lebar dengan gridColumn */}
+          <div className="card-fintech" style={{ padding: "20px", textAlign: "center", gridColumn: "span 2" }}>
+            <div style={{ fontSize: "28px", fontWeight: "700", color: "#16a34a" }}>
               Rp {totalSaldo.toLocaleString("id-ID")}
             </div>
-            <div className="text-xs text-slate-500 mt-1 font-semibold uppercase">
+            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               Total Saldo Simpanan
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-            <div className="text-2xl font-bold text-purple-600">
+
+          <div className="card-fintech" style={{ padding: "20px", textAlign: "center" }}>
+            <div style={{ fontSize: "24px", fontWeight: "700", color: "#9333ea", marginTop: "4px" }}>
               Rp{" "}
               {anggotaList.length > 0
-                ? Math.round(
-                    totalSaldo / anggotaList.length
-                  ).toLocaleString("id-ID")
+                ? Math.round(totalSaldo / anggotaList.length).toLocaleString("id-ID")
                 : 0}
             </div>
-            <div className="text-xs text-slate-500 mt-1 font-semibold uppercase">
+            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               Rata-rata/Anggota
             </div>
           </div>
@@ -98,18 +278,44 @@ export default async function SimpananPage({
 
         {/* Setoran Massal Banner */}
         {canInput && (
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-4 mb-6 text-white flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <div className="font-bold text-lg">
-                📅 Setoran Bulanan Massal
+          <div style={{
+            background: "linear-gradient(to right, #2563eb, #4f46e5)",
+            borderRadius: "16px",
+            padding: "20px 24px",
+            marginBottom: "24px",
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "16px",
+            boxShadow: "0 4px 12px rgba(37, 99, 235, 0.2)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <div style={{ background: "rgba(255,255,255,0.2)", padding: "12px", borderRadius: "12px", backdropFilter: "blur(4px)" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               </div>
-              <div className="text-sm opacity-90">
-                Input setoran bulanan untuk semua anggota aktif sekaligus
+              <div>
+                <div style={{ fontWeight: "700", fontSize: "18px", marginBottom: "4px" }}>
+                  Setoran Bulanan Massal
+                </div>
+                <div style={{ fontSize: "14px", opacity: 0.9 }}>
+                  Input setoran bulanan untuk semua anggota aktif sekaligus
+                </div>
               </div>
             </div>
             <Link
               href="/dashboard/simpanan/setoran-massal"
-              className="bg-white text-blue-700 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-blue-50 transition"
+              style={{
+                background: "#fff",
+                color: "#1d4ed8",
+                padding: "10px 20px",
+                borderRadius: "8px",
+                fontWeight: "600",
+                fontSize: "14px",
+                textDecoration: "none",
+                transition: "opacity 0.2s ease"
+              }}
             >
               Proses Sekarang →
             </Link>
@@ -117,52 +323,44 @@ export default async function SimpananPage({
         )}
 
         {/* Search */}
-        <form method="GET" className="mb-4">
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-              🔍
-            </span>
-            <input
-              type="text"
-              name="search"
-              defaultValue={search}
-              placeholder="Cari NIK atau nama anggota..."
-              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-blue-400 text-sm shadow-sm"
-            />
+        <form method="GET" style={{ marginBottom: "20px", position: "relative" }}>
+          <div style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
           </div>
+          <input
+            type="text"
+            name="search"
+            defaultValue={search}
+            placeholder="Cari NIK atau nama anggota..."
+            className="fintech-input"
+            style={{ boxShadow: "0 2px 12px rgba(15,45,107,.04)" }}
+          />
         </form>
 
-        {/* Table */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        {/* Table Data */}
+        <div className="card-fintech" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table className="fintech-table">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">
-                    NIK
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">
-                    Nama Anggota
-                  </th>
-                  <th className="text-right px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">
-                    Setoran/Bulan
-                  </th>
-                  <th className="text-right px-4 py-3 font-semibold text-slate-600">
-                    Total Saldo
-                  </th>
-                  <th className="text-center px-4 py-3 font-semibold text-slate-600">
-                    Aksi
-                  </th>
+                <tr>
+                  <th>NIK</th>
+                  <th>Nama Anggota</th>
+                  <th className="hide-on-mobile" style={{ textAlign: "right" }}>Setoran/Bulan</th>
+                  <th style={{ textAlign: "right" }}>Total Saldo</th>
+                  <th style={{ textAlign: "center" }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {anggotaList.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="text-center py-12 text-slate-400"
-                    >
-                      <div className="text-4xl mb-2">💰</div>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "48px 20px", color: "#94a3b8" }}>
+                      <svg style={{ margin: "0 auto 12px auto", display: "block", color: "#cbd5e1" }} width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" />
+                        <path d="M4 6v12c0 1.1.9 2 2 2h14v-4" />
+                        <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z" />
+                      </svg>
                       <div>Tidak ada data simpanan</div>
                     </td>
                   </tr>
@@ -172,31 +370,34 @@ export default async function SimpananPage({
                       anggota.saldo_simpanan?.[0]?.total_saldo || 0
                     );
                     return (
-                      <tr
-                        key={anggota.id}
-                        className="border-b border-slate-100 hover:bg-slate-50 transition"
-                      >
-                        <td className="px-4 py-3 font-mono text-sm text-slate-600">
+                      <tr key={anggota.id} style={{ transition: "background-color 0.2s" }}>
+                        <td style={{ fontFamily: "monospace", color: "#64748b" }}>
                           {anggota.nik}
                         </td>
-                        <td className="px-4 py-3 font-semibold text-slate-800">
+                        <td style={{ fontWeight: "600", color: "#0f2d6b" }}>
                           {anggota.nama}
                         </td>
-                        <td className="px-4 py-3 text-right hidden md:table-cell text-slate-600">
-                          Rp{" "}
-                          {Number(
-                            anggota.simpanan_bulanan
-                          ).toLocaleString("id-ID")}
+                        <td className="hide-on-mobile" style={{ textAlign: "right", color: "#64748b" }}>
+                          Rp {Number(anggota.simpanan_bulanan).toLocaleString("id-ID")}
                         </td>
-                        <td className="px-4 py-3 text-right font-bold text-green-700">
+                        <td style={{ textAlign: "right", fontWeight: "700", color: "#16a34a" }}>
                           Rp {saldo.toLocaleString("id-ID")}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td style={{ textAlign: "center" }}>
                           <Link
                             href={`/dashboard/simpanan/${anggota.id}`}
-                            className="text-blue-600 hover:text-blue-800 font-semibold text-xs"
+                            style={{
+                              background: "#eff6ff",
+                              color: "#2563eb",
+                              padding: "6px 16px",
+                              borderRadius: "20px",
+                              textDecoration: "none",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              display: "inline-block"
+                            }}
                           >
-                            Detail →
+                            Detail
                           </Link>
                         </td>
                       </tr>
@@ -207,7 +408,7 @@ export default async function SimpananPage({
             </table>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
