@@ -156,7 +156,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
               {[
   { icon: "👥", label: "Anggota", href: "/dashboard/anggota" },
   { icon: "💰", label: "Simpanan", href: "/dashboard/simpanan" },
-  { icon: "💳", label: "Pinjaman", href: "#" },
+  { icon: "💳", label: "Pinjaman", href: "/dashboard/pinjaman" },
   { icon: "✅", label: "Approval", href: "#" },
   { icon: "📊", label: "Laporan", href: "#" },
   { icon: "📒", label: "Kas Kecil", href: "#" },
@@ -188,7 +188,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
             🔐 Auth System Active · 🟢 Database Connected · ▲ Vercel Deployed
           </p>
           <p className="mt-2 text-xs">
-            © 2026 Koperasi Karyawan PT Elsewedy Electric Indonesia
+            © 2026 Koperasi Jasa Karyawan PT Elsewedy Electric Indonesia developed by Carlo Tech™️
           </p>
         </div>
       </div>
