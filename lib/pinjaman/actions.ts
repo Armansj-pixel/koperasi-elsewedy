@@ -250,7 +250,7 @@ export async function ajukanPinjaman(formData: FormData) {
   }
 
   // Cek pinjaman aktif
-  const pinjamanAktif = await getPinjamanAktifAnggota(session.userId)
+  const pinjamanAktif = await getPinjamanAktifAnggota(session.id)
   if (pinjamanAktif.length > 0) {
     redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent('Anda masih memiliki pinjaman aktif atau dalam proses persetujuan')}`)
   }
@@ -262,7 +262,7 @@ export async function ajukanPinjaman(formData: FormData) {
   const { data: pinjaman, error } = await supabase
     .from('pinjaman')
     .insert({
-      user_id: session.userId,
+      user_id: session.id,
       nominal,
       biaya_admin: biayaAdmin,
       total_diterima: totalDiterima,
@@ -286,7 +286,7 @@ export async function ajukanPinjaman(formData: FormData) {
 // ─── ACTION: Approve / Reject Pinjaman ───────────────────────────────────────
 
 export async function approvePinjaman(formData: FormData) {
-  const session = await getSession()
+  const session = await getCurrentUser()  
   if (!session) redirect('/login')
 
   const pinjamanId = parseInt(formData.get('pinjaman_id') as string)
@@ -382,7 +382,7 @@ export async function approvePinjaman(formData: FormData) {
 // ─── ACTION: Cairkan Pinjaman ─────────────────────────────────────────────────
 
 export async function cairkanPinjaman(formData: FormData) {
-  const session = await getSession()
+  const session = await getCurrentUser()  
   if (!session || session.role !== 'BENDAHARA') redirect('/login')
 
   const pinjamanId = parseInt(formData.get('pinjaman_id') as string)
@@ -446,7 +446,7 @@ export async function cairkanPinjaman(formData: FormData) {
 // ─── ACTION: Bayar Cicilan ────────────────────────────────────────────────────
 
 export async function bayarCicilan(formData: FormData) {
-  const session = await getSession()
+  const session = await getCurrentUser()
   if (!session) redirect('/login')
 
   const cicilanId = parseInt(formData.get('cicilan_id') as string)
@@ -501,7 +501,8 @@ const PinjamanExistingSchema = z.object({
 })
 
 export async function inputPinjamanExisting(formData: FormData) {
-  const session = await getSession()
+  const session = await getCurrentUser()
+  
   if (!session || !['BENDAHARA', 'SUPERADMIN'].includes(session.role)) {
     redirect('/login')
   }
