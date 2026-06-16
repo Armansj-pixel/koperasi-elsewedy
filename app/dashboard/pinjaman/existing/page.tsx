@@ -1,4 +1,4 @@
-import { getSession } from '@/lib/auth/session'
+import { getCurrentUser } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import PinjamanExistingForm from './PinjamanExistingForm'
