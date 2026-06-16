@@ -53,6 +53,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
           width: 200px; height: 200px;
           background: radial-gradient(circle, rgba(255,255,255,.12) 0%, transparent 70%);
           border-radius: 50%;
+          pointer-events: none;
         }
         .kop-header::after {
           content: '';
@@ -61,6 +62,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
           width: 140px; height: 140px;
           background: radial-gradient(circle, rgba(59,130,246,.25) 0%, transparent 70%);
           border-radius: 50%;
+          pointer-events: none;
         }
 
         .kop-logout-btn {
