@@ -80,7 +80,7 @@ if (!session) redirect('/login')
   if (!p || error) notFound()
 
   // Anggota hanya bisa lihat pinjaman sendiri
-  if (session.role === 'ANGGOTA' && p.user_id !== session.Id) {
+  if (session.role === 'ANGGOTA' && p.user_id !== session.id) {
     redirect('/dashboard/pinjaman')
   }
 
