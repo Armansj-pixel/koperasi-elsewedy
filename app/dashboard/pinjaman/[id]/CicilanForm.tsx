@@ -22,35 +22,84 @@ export function CairanForm({ pinjamanId }: CairanFormProps) {
   const today = new Date().toISOString().split('T')[0]
 
   return (
-    <div className="bg-white rounded-xl border-2 border-purple-100 p-5">
-      <p className="text-sm font-semibold text-purple-900 mb-1">Pencairan Pinjaman</p>
-      <p className="text-xs text-gray-500 mb-4">
-        Setelah dicairkan, jadwal cicilan akan dibuat otomatis dan pinjaman menjadi AKTIF.
-      </p>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <input type="hidden" name="pinjaman_id" value={pinjamanId} />
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tanggal Pencairan <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="date"
-            name="tanggal_pencairan"
-            defaultValue={today}
-            max={today}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
-            required
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="w-full py-2.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition"
-        >
-          {isPending ? 'Memproses...' : '💰 Cairkan Pinjaman'}
-        </button>
-      </form>
-    </div>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .fintech-input-purple {
+          width: 100%;
+          padding: 10px 14px;
+          border-radius: 8px;
+          border: 1px solid #d1d5db;
+          font-size: 14px;
+          transition: all 0.2s ease;
+          background-color: #fff;
+          color: #1f2937;
+        }
+        .fintech-input-purple:focus {
+          outline: none;
+          border-color: #a855f7;
+          box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+        }
+        .fintech-btn-purple {
+          width: 100%;
+          padding: 10px 0;
+          background-color: #9333ea;
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+        .fintech-btn-purple:hover:not(:disabled) {
+          background-color: #7e22ce;
+        }
+        .fintech-btn-purple:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+      `}} />
+      <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '2px solid #f3e8ff', padding: '20px' }}>
+        <p style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '600', color: '#581c87' }}>Pencairan Pinjaman</p>
+        <p style={{ margin: '0 0 16px 0', fontSize: '12px', color: '#6b7280', lineHeight: '1.5' }}>
+          Setelah dicairkan, jadwal cicilan akan dibuat otomatis dan pinjaman menjadi AKTIF.
+        </p>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <input type="hidden" name="pinjaman_id" value={pinjamanId} />
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+              Tanggal Pencairan <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <input
+              type="date"
+              name="tanggal_pencairan"
+              defaultValue={today}
+              max={today}
+              className="fintech-input-purple"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isPending}
+            className="fintech-btn-purple"
+          >
+            {isPending ? 'Memproses...' : (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/>
+                </svg>
+                Cairkan Pinjaman
+              </>
+            )}
+          </button>
+        </form>
+      </div>
+    </>
   )
 }
 
@@ -71,10 +120,10 @@ function formatTanggal(d: string) {
 }
 
 const STATUS_CICILAN: Record<string, { label: string; color: string }> = {
-  SCHEDULED: { label: 'Belum Bayar', color: 'text-gray-500' },
-  PAID:       { label: 'Lunas', color: 'text-green-600' },
-  OVERDUE:    { label: 'Jatuh Tempo', color: 'text-red-600' },
-  WAIVED:     { label: 'Dihapuskan', color: 'text-gray-400' },
+  SCHEDULED: { label: 'Belum Bayar', color: '#6b7280' },
+  PAID:       { label: 'Lunas', color: '#16a34a' },
+  OVERDUE:    { label: 'Jatuh Tempo', color: '#dc2626' },
+  WAIVED:     { label: 'Dihapuskan', color: '#9ca3af' },
 }
 
 export function BayarCicilanForm({ cicilan, pinjamanId, userRole }: BayarCicilanFormProps) {
@@ -92,50 +141,118 @@ export function BayarCicilanForm({ cicilan, pinjamanId, userRole }: BayarCicilan
   }
 
   return (
-    <div className="bg-white rounded-xl border overflow-hidden">
-      <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-        <p className="text-sm font-semibold text-gray-900">Jadwal Cicilan</p>
-        <p className="text-xs text-gray-500">{totalBayar}/{totalCicilan} terbayar</p>
-      </div>
-
-      {/* Progress bar */}
-      <div className="px-4 py-2 border-b">
-        <div className="w-full bg-gray-100 rounded-full h-2">
-          <div
-            className="bg-green-500 h-2 rounded-full transition-all"
-            style={{ width: `${totalCicilan > 0 ? (totalBayar / totalCicilan) * 100 : 0}%` }}
-          />
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .fintech-cicilan-container {
+          background-color: #fff;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+          overflow: hidden;
+        }
+        .cicilan-list-wrapper {
+          max-height: 384px;
+          overflow-y: auto;
+        }
+        .cicilan-row {
+          padding: 12px 16px;
+          border-bottom: 1px solid #f3f4f6;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .cicilan-row:last-child {
+          border-bottom: none;
+        }
+        .fintech-btn-bayar {
+          padding: 6px 12px;
+          background-color: #16a34a;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .fintech-btn-bayar:hover:not(:disabled) {
+          background-color: #15803d;
+        }
+        .fintech-btn-bayar:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        /* Custom Scrollbar for list */
+        .cicilan-list-wrapper::-webkit-scrollbar {
+          width: 6px;
+        }
+        .cicilan-list-wrapper::-webkit-scrollbar-track {
+          background: #f1f5f9;
+        }
+        .cicilan-list-wrapper::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+        .cicilan-list-wrapper::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+      `}} />
+      <div className="fintech-cicilan-container">
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#111827' }}>Jadwal Cicilan</p>
+          <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>{totalBayar}/{totalCicilan} terbayar</p>
         </div>
-      </div>
 
-      <div className="divide-y max-h-96 overflow-y-auto">
-        {cicilan.map((c) => {
-          const statusInfo = STATUS_CICILAN[c.status] ?? { label: c.status, color: 'text-gray-500' }
-          const isOverdue = c.status === 'SCHEDULED' && new Date(c.tanggal_jatuh_tempo) < new Date()
-          const isPaid = c.status === 'PAID'
+        {/* Progress bar */}
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid #e5e7eb' }}>
+          <div style={{ width: '100%', backgroundColor: '#f3f4f6', borderRadius: '9999px', height: '8px', overflow: 'hidden' }}>
+            <div
+              style={{
+                backgroundColor: '#22c55e',
+                height: '100%',
+                borderRadius: '9999px',
+                transition: 'width 0.3s ease',
+                width: \`\${totalCicilan > 0 ? (totalBayar / totalCicilan) * 100 : 0}%\`
+              }}
+            />
+          </div>
+        </div>
 
-          return (
-            <div key={c.id} className={`px-4 py-3 ${isOverdue ? 'bg-red-50' : ''}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                    isPaid ? 'bg-green-100 text-green-700' :
-                    isOverdue ? 'bg-red-100 text-red-700' :
-                    'bg-gray-100 text-gray-500'
-                  }`}>
-                    {isPaid ? '✓' : c.nomor_cicilan}
+        <div className="cicilan-list-wrapper">
+          {cicilan.map((c) => {
+            const statusInfo = STATUS_CICILAN[c.status] ?? { label: c.status, color: '#6b7280' }
+            const isOverdue = c.status === 'SCHEDULED' && new Date(c.tanggal_jatuh_tempo) < new Date()
+            const isPaid = c.status === 'PAID'
+
+            return (
+              <div key={c.id} className="cicilan-row" style={{ backgroundColor: isOverdue ? '#fef2f2' : 'transparent' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    backgroundColor: isPaid ? '#dcfce7' : isOverdue ? '#fee2e2' : '#f3f4f6',
+                    color: isPaid ? '#15803d' : isOverdue ? '#b91c1c' : '#6b7280'
+                  }}>
+                    {isPaid ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    ) : c.nomor_cicilan}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{formatRupiah(c.nominal_cicilan)}</p>
-                    <p className="text-xs text-gray-400">
+                    <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#111827' }}>{formatRupiah(c.nominal_cicilan)}</p>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#9ca3af' }}>
                       Jatuh tempo: {formatTanggal(c.tanggal_jatuh_tempo)}
                       {c.tanggal_pembayaran && ` · Bayar: ${formatTanggal(c.tanggal_pembayaran)}`}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-medium ${isOverdue ? 'text-red-600' : statusInfo.color}`}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '500', color: isOverdue ? '#dc2626' : statusInfo.color }}>
                     {isOverdue ? 'Jatuh Tempo!' : statusInfo.label}
                   </span>
 
@@ -147,7 +264,7 @@ export function BayarCicilanForm({ cicilan, pinjamanId, userRole }: BayarCicilan
                       <button
                         type="submit"
                         disabled={isPending}
-                        className="px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:opacity-50 transition"
+                        className="fintech-btn-bayar"
                       >
                         {isPending ? '...' : 'Bayar'}
                       </button>
@@ -155,16 +272,16 @@ export function BayarCicilanForm({ cicilan, pinjamanId, userRole }: BayarCicilan
                   )}
                 </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
 
-        {cicilan.length === 0 && (
-          <div className="py-8 text-center text-gray-400 text-sm">
-            Jadwal cicilan belum dibuat
-          </div>
-        )}
+          {cicilan.length === 0 && (
+            <div style={{ padding: '32px 0', textAlign: 'center', color: '#9ca3af', fontSize: '14px' }}>
+              Jadwal cicilan belum dibuat
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
