@@ -232,7 +232,7 @@ const AjukanPinjamanSchema = z.object({
 })
 
 export async function ajukanPinjaman(formData: FormData) {
-  const session = await getSession()
+  const session = await getCurrentUser() 
   if (!session) redirect('/login')
 
   const nominal = parseInt(formData.get('nominal') as string)
