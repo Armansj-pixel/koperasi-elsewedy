@@ -1,19 +1,22 @@
 import type { Metadata } from "next";
-import "./globals.css";
+import { Inter } from "next/font/google";
+import "./globals.css"; // <-- Ini wajib ada dan path-nya harus benar
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Koperasi Karyawan Elsewedy",
-  description: "PWA Koperasi PT Elsewedy Electric Indonesia",
+  title: "Koperasi Elsewedy",
+  description: "PWA Koperasi Jasa Karyawan",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="id">
-      <body>{children}</body>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }
