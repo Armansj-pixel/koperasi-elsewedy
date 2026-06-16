@@ -411,7 +411,7 @@ export async function cairkanPinjaman(formData: FormData) {
       status: 'ACTIVE',
       tanggal_pencairan: tanggalMulai.toISOString().split('T')[0],
       tanggal_jatuh_tempo: tanggalJatuhTempo.toISOString().split('T')[0],
-      disbursed_by: session.userId,
+      disbursed_by: session.id,
       disbursed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -548,7 +548,7 @@ export async function inputPinjamanExisting(formData: FormData) {
       tanggal_disetujui: tanggal_pencairan,
       tanggal_pencairan: tanggal_pencairan,
       tanggal_jatuh_tempo: tanggalJatuhTempo.toISOString().split('T')[0],
-      disbursed_by: session.userId,
+      disbursed_by: session.id,
       disbursed_at: new Date().toISOString(),
       catatan_pengaju: `[MIGRASI] ${parsed.data.catatan ?? ''}`.trim(),
     })
