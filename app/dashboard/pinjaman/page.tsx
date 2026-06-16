@@ -24,7 +24,7 @@ export default async function PinjamanPage({
 }: {
   searchParams: { status?: string; success?: string; error?: string }
 }) {
-  const session = await getSession()
+  const session = await getCurrentUser()
   if (!session) redirect('/login')
 
   const filterStatus = searchParams.status as string | undefined
