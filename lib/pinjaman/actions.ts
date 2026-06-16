@@ -339,17 +339,17 @@ export async function approvePinjaman(formData: FormData) {
 
     const levelFields: Record<string, Record<string, unknown>> = {
       PENDING_L1: {
-        approved_l1_by: session.userId,
+        approved_l1_by: session.id,
         approved_l1_at: new Date().toISOString(),
         catatan_l1: catatan.trim() || null,
       },
       PENDING_L2: {
-        approved_l2_by: session.userId,
+        approved_l2_by: session.id,
         approved_l2_at: new Date().toISOString(),
         catatan_l2: catatan.trim() || null,
       },
       PENDING_L3: {
-        approved_l3_by: session.userId,
+        approved_l3_by: session.id,
         approved_l3_at: new Date().toISOString(),
         catatan_l3: catatan.trim() || null,
         tanggal_disetujui: new Date().toISOString().split('T')[0],
