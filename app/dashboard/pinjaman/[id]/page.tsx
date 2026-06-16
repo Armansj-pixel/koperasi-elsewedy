@@ -1,4 +1,4 @@
-import { getSession } from '@/lib/auth/session'
+import { getCurrentUser } from '@/lib/auth/session'
 import { redirect, notFound } from 'next/navigation'
 import { getPinjamanDetail } from '@/lib/pinjaman/actions'
 import ApprovalForm from './ApprovalForm'
