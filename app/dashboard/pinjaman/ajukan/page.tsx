@@ -18,7 +18,7 @@ const session = await getCurrentUser()
   }
 
   // Cek pinjaman aktif
-  const pinjamanAktif = await getPinjamanAktifAnggota(session.userId)
+  const pinjamanAktif = await getPinjamanAktifAnggota(session.id)
   const adaPinjamanAktif = pinjamanAktif.length > 0
 
   return (
