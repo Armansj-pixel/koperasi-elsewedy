@@ -9,7 +9,7 @@ export default async function AjukanPinjamanPage({
 }: {
   searchParams: { error?: string }
 }) {
-  const session = await getSession()
+const session = await getCurrentUser()
   if (!session) redirect('/login')
 
   // Hanya anggota yang bisa ajukan
