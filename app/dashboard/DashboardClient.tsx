@@ -29,7 +29,13 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
 
   async function handleLogout() {
     setLoggingOut(true);
-    await logoutAction();
+    try {
+      await logoutAction();
+    } catch {
+      // Next.js redirect() throws internally — this is expected, ignore it
+    } finally {
+      setLoggingOut(false);
+    }
   }
 
   return (
