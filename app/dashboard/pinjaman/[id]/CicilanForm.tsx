@@ -211,7 +211,7 @@ export function BayarCicilanForm({ cicilan, pinjamanId, userRole }: BayarCicilan
                 height: '100%',
                 borderRadius: '9999px',
                 transition: 'width 0.3s ease',
-                width: \`\${totalCicilan > 0 ? (totalBayar / totalCicilan) * 100 : 0}%\`
+                width: `${totalCicilan > 0 ? (totalBayar / totalCicilan) * 100 : 0}%`
               }}
             />
           </div>
