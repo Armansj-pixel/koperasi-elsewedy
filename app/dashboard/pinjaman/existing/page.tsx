@@ -9,7 +9,7 @@ export default async function PinjamanExistingPage({
 }: {
   searchParams: { error?: string }
 }) {
-  const session = await getSession()
+  const session = await getCurrentUser()
   if (!session) redirect('/login')
 
   if (!['BENDAHARA', 'SUPERADMIN'].includes(session.role)) {
