@@ -70,9 +70,9 @@ export default async function PinjamanDetailPage({
   params: { id: string }
   searchParams: { success?: string; error?: string }
 }) {
-  const session = await getSession()
-  if (!session) redirect('/login')
-
+  const session = await getCurrentUser()
+if (!session) redirect('/login')
+  
   const pinjamanId = parseInt(params.id)
   if (isNaN(pinjamanId)) notFound()
 
