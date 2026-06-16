@@ -4,20 +4,12 @@ const config: Config = {
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}", // <-- Pastikan baris ini ada!
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}", // Tambahkan ini jika kamu taruh komponen di lib
   ],
   theme: {
-    extend: {
-      colors: {
-        primary: {
-          DEFAULT: "#1e3a8a",
-          light: "#3b82f6",
-        },
-        accent: "#f59e0b",
-      },
-    },
+    extend: {},
   },
   plugins: [],
 };
-
 export default config;
