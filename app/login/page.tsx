@@ -154,10 +154,7 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* LoginForm — komponen kamu tetap dipakai di sini */}
-            {/* Tambahkan className="lp-input" pada setiap <input> di LoginForm */}
-            {/* dan className="lp-btn" pada tombol submit-nya */}
-            <LoginForm inputClassName="lp-input" btnClassName="lp-btn" />
+            <LoginForm />
 
             {/* HELP */}
             <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #f1f5f9' }}>
