@@ -1,15 +1,14 @@
 import React from "react";
 import { requireRole } from "@/lib/auth/session";
-// 1. IMPORT FUNGSI getSaldoByUserId YANG ADA DI ACTIONS.TS
 import { getAllSaldoSimpanan, getSaldoByUserId } from "@/lib/simpanan/actions";
 import Link from "next/link";
 
 export default async function SimpananPage({
   searchParams,
 }: {
-  searchParams: { search?: string };
+  searchParams: { search?: string; msg?: string; error?: string };
 }) {
-  // 2. Izinkan ANGGOTA mengakses halaman ini
+  // 1. Izinkan akses untuk semua role terkait
   const currentUser = await requireRole([
     "SUPERADMIN",
     "SEKRETARIS",
@@ -20,7 +19,7 @@ export default async function SimpananPage({
 
   const search = searchParams?.search || "";
   
-  // 3. Pisahkan logika peran
+  // 2. Pisahkan logika tampilan berdasarkan role
   const isPengurus = ["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"].includes(currentUser.role);
   const canInput = ["SUPERADMIN", "BENDAHARA"].includes(currentUser.role);
 
@@ -28,16 +27,14 @@ export default async function SimpananPage({
   let totalSaldo = 0;
   let dataSimpananPribadi = null;
 
-  // 4. PANGGIL FUNGSI DATABASE BERDASARKAN ROLE (Ini kuncinya!)
+  // 3. Panggil fungsi database berdasarkan role
   if (isPengurus) {
-    // Jika Pengurus: Tarik semua data anggota
     const { data } = await getAllSaldoSimpanan(search);
     anggotaList = data || [];
     totalSaldo = anggotaList.reduce((sum: number, a: any) => {
       return sum + Number(a.saldo_simpanan?.[0]?.total_saldo || 0);
     }, 0);
   } else {
-    // Jika Anggota: HANYA tarik data pribadinya menggunakan getSaldoByUserId
     const { data } = await getSaldoByUserId(currentUser.id);
     dataSimpananPribadi = data;
   }
@@ -126,20 +123,35 @@ export default async function SimpananPage({
               </h1>
             </div>
 
-            {/* Bagian Kanan: Tombol Aksi */}
-            <div className="header-actions" style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
-              {canInput && (
-                <Link href="/dashboard/simpanan/input" className="fintech-btn-header">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Input Setoran
-                </Link>
+            {/* Bagian Kanan: Tombol Aksi - DIPERBARUI */}
+            <div className="header-actions" style={{ display: "flex", gap: "10px", marginTop: "8px", flexWrap: "wrap" }}>
+              
+              {/* TOMBOL KHUSUS PENGURUS */}
+              {isPengurus && (
+                <>
+                  {canInput && (
+                    <Link href="/dashboard/simpanan/input" className="fintech-btn-header">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      Input Setoran
+                    </Link>
+                  )}
+                  {/* Tombol Menuju Persetujuan Penarikan */}
+                  <Link href="/dashboard/simpanan/penarikan" className="fintech-btn-header" style={{ color: "#d97706" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    Persetujuan
+                  </Link>
+                  {/* Tombol Menuju Rekap Pencairan */}
+                  <Link href="/dashboard/simpanan/rekap" className="fintech-btn-header" style={{ color: "#9333ea" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    Rekap Pencairan
+                  </Link>
+                </>
               )}
               
+              {/* TOMBOL KHUSUS ANGGOTA */}
               {!isPengurus && (
                 <Link href="/dashboard/simpanan/pengajuan-penarikan" className="fintech-btn-header" style={{ color: "#d97706" }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-                  </svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                   Ajukan Penarikan
                 </Link>
               )}
@@ -152,6 +164,20 @@ export default async function SimpananPage({
       {/* --- Main Content Area --- */}
       <main style={{ maxWidth: "1200px", margin: "-45px auto 0 auto", padding: "0 20px", position: "relative", zIndex: 20 }}>
         
+        {/* ========================================= */}
+        {/* NOTIFIKASI SUKSES / ERROR (FLASH MESSAGES) */}
+        {/* ========================================= */}
+        {searchParams?.msg && (
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", padding: "14px 16px", borderRadius: "12px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: "600", boxShadow: "0 2px 8px rgba(21,128,61,0.1)" }}>
+            <span>✅ {searchParams.msg}</span>
+          </div>
+        )}
+        {searchParams?.error && (
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: "14px 16px", borderRadius: "12px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: "600", boxShadow: "0 2px 8px rgba(185,28,28,0.1)" }}>
+            <span>❌ {searchParams.error}</span>
+          </div>
+        )}
+
         {/* ========================================= */}
         {/* VIEW UNTUK PENGURUS (SUPERADMIN/BENDAHARA) */}
         {/* ========================================= */}
@@ -249,7 +275,6 @@ export default async function SimpananPage({
               Total Saldo Aktif
             </h2>
             
-            {/* 5. MENYESUAIKAN CARA PEMANGGILAN DATA SALDO DARI getSaldoByUserId */}
             <div style={{ fontSize: "36px", fontWeight: "800", color: "#16a34a", marginBottom: "24px" }}>
               Rp {Number(dataSimpananPribadi?.saldo?.total_saldo || 0).toLocaleString("id-ID")}
             </div>
