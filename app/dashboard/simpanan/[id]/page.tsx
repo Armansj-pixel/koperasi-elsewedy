@@ -54,9 +54,15 @@ export default async function DetailSimpananPage({
 }: {
   params: { id: string };
 }) {
+  // 1. TAMBAHKAN ANGGOTA KE DAFTAR IZIN
   const currentUser = await requireRole([
-    "SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA",
+    "SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA", "ANGGOTA"
   ]);
+
+  // 2. PROTEKSI PRIVASI: Cegah Anggota mengintip ID orang lain
+  if (currentUser.role === "ANGGOTA" && currentUser.id !== params.id) {
+    redirect("/dashboard/simpanan");
+  }
 
   const { data, error } = await getSaldoByUserId(params.id);
   const { data: riwayat } = await getRiwayatSimpanan(params.id, 50);
@@ -66,9 +72,10 @@ export default async function DetailSimpananPage({
   }
 
   const { saldo, user } = data;
-  const canInput = ["SUPERADMIN", "BENDAHARA"].includes(
-    currentUser.role
-  );
+  
+  // Tentukan hak akses UI tambahan
+  const canInput = ["SUPERADMIN", "BENDAHARA"].includes(currentUser.role);
+  const isOwner = currentUser.id === params.id;
 
   // Hitung total setoran & penarikan
   const totalSetoran = (riwayat || [])
@@ -100,7 +107,6 @@ export default async function DetailSimpananPage({
           border-bottom-right-radius: 24px;
         }
 
-        /* Aturan wajib: pointer-events: none untuk elemen pseudo */
         .fintech-header::before,
         .fintech-header::after {
           content: '';
@@ -227,7 +233,7 @@ export default async function DetailSimpananPage({
               </Link>
             </div>
 
-            {/* Bagian Kanan: Tombol Aksi Utama (Putih Teks Biru) */}
+            {/* Bagian Kanan: Tombol Aksi Utama (Hanya terlihat oleh Admin/Bendahara) */}
             {canInput && (
               <Link
                 href={`/dashboard/simpanan/input?user_id=${params.id}`}
@@ -267,7 +273,7 @@ export default async function DetailSimpananPage({
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
             </svg>
-            Detail Simpanan Anggota
+            {isOwner ? "Riwayat Simpanan Saya" : "Detail Simpanan Anggota"}
           </h1>
 
         </div>
@@ -424,11 +430,15 @@ export default async function DetailSimpananPage({
             </svg>
             Kembali
           </Link>
-          <Link href={`/dashboard/anggota/${params.id}`} className="fintech-btn-primary">
+          <Link 
+            // Arahkan ke /dashboard/profil jika ini data miliknya sendiri, kalau pengurus melihat data orang lain arahkan ke detail anggota
+            href={isOwner ? "/dashboard/profil" : `/dashboard/anggota/${params.id}`} 
+            className="fintech-btn-primary"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
             </svg>
-            Lihat Profil Anggota
+            {isOwner ? "Lihat Profil Saya" : "Lihat Profil Anggota"}
           </Link>
         </div>
 
