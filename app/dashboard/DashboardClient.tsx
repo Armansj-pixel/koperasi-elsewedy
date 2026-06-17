@@ -13,19 +13,53 @@ const roleLabels: Record<CurrentUser["role"], string> = {
   SUPERADMIN: "Super Admin",
 };
 
+// 1. TAMBAHKAN allowedRoles KE DALAM ARRAY MODULES
 const modules = [
-  { icon: "👥", label: "Anggota",   href: "/dashboard/anggota",  isActive: true,  bg: "#dbeafe" },
-  { icon: "💰", label: "Simpanan",  href: "/dashboard/simpanan", isActive: true,  bg: "#d1fae5" },
-  { icon: "💳", label: "Pinjaman",  href: "/dashboard/pinjaman", isActive: true,  bg: "#fef3c7" },
-  { icon: "✅", label: "Approval",  href: "#",                   isActive: false, bg: "#ede9fe" },
-  { icon: "📊", label: "Laporan",   href: "#",                   isActive: false, bg: "#ffe4e6" },
-  { icon: "📒", label: "Kas Kecil", href: "#",                   isActive: false, bg: "#ccfbf1" },
-  { icon: "📰", label: "Berita",    href: "#",                   isActive: false, bg: "#e0f2fe" },
-  { icon: "📚", label: "Akuntansi", href: "#",                   isActive: false, bg: "#e0e7ff" },
+  { 
+    icon: "👥", label: "Anggota",   href: "/dashboard/anggota",  isActive: true,  bg: "#dbeafe",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]
+  },
+  { 
+    icon: "💰", label: "Simpanan",  href: "/dashboard/simpanan", isActive: true,  bg: "#d1fae5",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS", "ANGGOTA"] 
+  },
+  { 
+    icon: "💳", label: "Pinjaman",  href: "/dashboard/pinjaman", isActive: true,  bg: "#fef3c7",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS", "ANGGOTA"] 
+  },
+  { 
+    icon: "👤", label: "Profil",    href: "/dashboard/profil",   isActive: true,  bg: "#f3e8ff",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS", "ANGGOTA"] 
+  },
+  { 
+    icon: "✅", label: "Approval",  href: "#",                   isActive: false, bg: "#ede9fe",
+    allowedRoles: ["SUPERADMIN", "KETUA", "BENDAHARA", "SEKRETARIS"] 
+  },
+  { 
+    icon: "📊", label: "Laporan",   href: "#",                   isActive: false, bg: "#ffe4e6",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"] 
+  },
+  { 
+    icon: "📒", label: "Kas Kecil", href: "#",                   isActive: false, bg: "#ccfbf1",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA"] 
+  },
+  { 
+    icon: "📰", label: "Berita",    href: "#",                   isActive: false, bg: "#e0f2fe",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS", "ANGGOTA"] 
+  },
+  { 
+    icon: "📚", label: "Akuntansi", href: "#",                   isActive: false, bg: "#e0e7ff",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA"] 
+  },
 ];
 
 export function DashboardClient({ user }: { user: CurrentUser }) {
   const [loggingOut, setLoggingOut] = useState(false);
+
+  // 2. FILTER MODULES BERDASARKAN ROLE USER YANG LOGIN
+  const allowedModules = modules.filter(module => 
+    module.allowedRoles.includes(user.role)
+  );
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -209,7 +243,8 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
 
             <div className="kop-card" style={{ padding: '20px 16px', marginBottom: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px 4px' }}>
-                {modules.map((item, idx) => {
+                {/* 3. UBAH MAP DARI modules MENJADI allowedModules */}
+                {allowedModules.map((item, idx) => {
                   if (item.isActive) {
                     return (
                       <Link key={idx} href={item.href} className="kop-menu-link" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textDecoration: 'none' }}>
