@@ -13,7 +13,6 @@ const roleLabels: Record<CurrentUser["role"], string> = {
   SUPERADMIN: "Super Admin",
 };
 
-// 1. TAMBAHKAN allowedRoles KE DALAM ARRAY MODULES
 const modules = [
   { 
     icon: "👥", label: "Anggota",   href: "/dashboard/anggota",  isActive: true,  bg: "#dbeafe",
@@ -55,10 +54,19 @@ const modules = [
 
 export function DashboardClient({ user }: { user: CurrentUser }) {
   const [loggingOut, setLoggingOut] = useState(false);
+  
+  // 1. STATE UNTUK SWITCH MODE
+  const [isMemberMode, setIsMemberMode] = useState(false);
 
-  // 2. FILTER MODULES BERDASARKAN ROLE USER YANG LOGIN
+  // Cek apakah user adalah pengurus
+  const isPengurus = ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"].includes(user.role);
+
+  // 2. TENTUKAN ROLE EFEKTIF SAAT INI (Jika tombol ditekan, role dianggap ANGGOTA)
+  const effectiveRole = (isPengurus && isMemberMode) ? "ANGGOTA" : user.role;
+
+  // 3. FILTER MODULES BERDASARKAN ROLE EFEKTIF
   const allowedModules = modules.filter(module => 
-    module.allowedRoles.includes(user.role)
+    module.allowedRoles.includes(effectiveRole)
   );
 
   async function handleLogout() {
@@ -66,7 +74,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
     try {
       await logoutAction();
     } catch {
-      // Next.js redirect() throws internally — this is expected, ignore it
+      // Next.js redirect() throws internally
     } finally {
       setLoggingOut(false);
     }
@@ -164,7 +172,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
       <main className="kop-shell min-h-screen bg-slate-100 flex justify-center">
         <div className="w-full max-w-md bg-slate-100 min-h-screen relative sm:shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
 
-          {/* ── 1. HEADER ── */}
+          {/* ── HEADER ── */}
           <div className="kop-header">
             <div className="flex justify-between items-center relative z-10">
               <div>
@@ -198,7 +206,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
           {/* ── BODY ── */}
           <div style={{ padding: '0 16px 32px', marginTop: -60, position: 'relative', zIndex: 5 }}>
 
-            {/* ── 2. PROFILE CARD ── */}
+            {/* ── PROFILE CARD ── */}
             <div className="kop-card" style={{ padding: 20, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
                 {/* Avatar */}
@@ -236,18 +244,56 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
               </div>
             </div>
 
-            {/* ── 3. MENU ── */}
+            {/* ── 4. TOMBOL SWITCH MODE (KHUSUS PENGURUS) ── */}
+            {isPengurus && (
+              <div className="kop-card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isMemberMode ? '#f0fdf4' : '#fff', border: isMemberMode ? '1px solid #bbf7d0' : '1px solid #e2e8f0', transition: 'all 0.3s' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: isMemberMode ? '#dcfce7' : '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isMemberMode ? '#16a34a' : '#2563eb' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      {isMemberMode ? (
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                      ) : (
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                      )}
+                    </svg>
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: isMemberMode ? '#166534' : '#0f172a', marginBottom: 2 }}>
+                      {isMemberMode ? 'Mode Anggota' : 'Mode Pengurus'}
+                    </p>
+                    <p style={{ fontSize: 10, color: isMemberMode ? '#15803d' : '#64748b' }}>
+                      {isMemberMode ? 'Menampilkan menu pribadi' : 'Akses menu administratif'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setIsMemberMode(!isMemberMode)}
+                  style={{ background: isMemberMode ? '#16a34a' : '#2563eb', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', boxShadow: isMemberMode ? '0 2px 8px rgba(22,163,74,0.2)' : '0 2px 8px rgba(37,99,235,0.2)' }}
+                >
+                  {isMemberMode ? 'Kembali' : 'Ganti Mode'}
+                </button>
+              </div>
+            )}
+
+            {/* ── MENU ── */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px', marginBottom: 12 }}>
               <h3 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', letterSpacing: '-.01em' }}>Menu Utama</h3>
             </div>
 
             <div className="kop-card" style={{ padding: '20px 16px', marginBottom: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px 4px' }}>
-                {/* 3. UBAH MAP DARI modules MENJADI allowedModules */}
                 {allowedModules.map((item, idx) => {
                   if (item.isActive) {
+                    // 5. JIKA SEDANG MODE ANGGOTA, ARAHKAN SIMPANAN/PINJAMAN LANGSUNG KE AKUN PRIBADINYA
+                    let targetHref = item.href;
+                    if (isPengurus && isMemberMode) {
+                      if (item.label === "Simpanan") targetHref = `/dashboard/simpanan/${user.id}`;
+                      if (item.label === "Pinjaman") targetHref = `/dashboard/pinjaman/${user.id}`;
+                    }
+
                     return (
-                      <Link key={idx} href={item.href} className="kop-menu-link" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textDecoration: 'none' }}>
+                      <Link key={idx} href={targetHref} className="kop-menu-link" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textDecoration: 'none' }}>
                         <div className="kop-menu-icon" style={{ background: item.bg }}>
                           {item.icon}
                         </div>
@@ -274,7 +320,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
               </div>
             </div>
 
-            {/* ── 4. FOOTER ── */}
+            {/* ── FOOTER ── */}
             <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 20, padding: '5px 12px', marginBottom: 12 }}>
                 <div style={{ position: 'relative', width: 8, height: 8 }}>
