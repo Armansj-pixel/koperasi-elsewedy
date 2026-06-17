@@ -268,6 +268,7 @@ export async function inputSetoran(formData: FormData) {
     )} untuk ${user.nama} berhasil dicatat!`,
   };
 }
+
 // =====================================================================
 // SETORAN BULANAN MASSAL
 // =====================================================================
@@ -371,6 +372,29 @@ export async function ajukanPenarikan(formData: FormData) {
   const currentUser = await requireRole([
     "ANGGOTA", "SEKRETARIS", "BENDAHARA", "KETUA", "SUPERADMIN",
   ]);
+
+  // =====================================================================
+  // PROTEKSI JAM CUT-OFF UNTUK ANGGOTA (Kamis 09:00 - 15:00 WIB)
+  // =====================================================================
+  if (currentUser.role === "ANGGOTA") {
+    const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+    const dayOfWeek = now.getDay();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    const currentTimeInMinutes = (currentHour * 60) + currentMinute;
+    const cutOffStart = 9 * 60;  // Jam 09:00
+    const cutOffEnd = 15 * 60;   // Jam 15:00
+
+    if (dayOfWeek === 4 && currentTimeInMinutes >= cutOffStart && currentTimeInMinutes < cutOffEnd) {
+      return {
+        success: false,
+        error: "Gagal: Pengajuan ditolak sistem karena sedang dalam masa cut-off mingguan (Kamis 09:00 - 15:00 WIB).",
+      };
+    }
+  }
+  // =====================================================================
+
   const supabase = createServiceClient();
 
   const raw = {
@@ -571,4 +595,3 @@ export async function getListPenarikan(status?: string) {
 
   return { success: true, data: data || [] };
 }
-    
