@@ -1,6 +1,7 @@
 import React from "react";
 import { requireRole } from "@/lib/auth/session";
-import { getAllSaldoSimpanan } from "@/lib/simpanan/actions";
+// 1. IMPORT FUNGSI getSaldoByUserId YANG ADA DI ACTIONS.TS
+import { getAllSaldoSimpanan, getSaldoByUserId } from "@/lib/simpanan/actions";
 import Link from "next/link";
 
 export default async function SimpananPage({
@@ -8,7 +9,7 @@ export default async function SimpananPage({
 }: {
   searchParams: { search?: string };
 }) {
-  // 1. Tambahkan ANGGOTA agar bisa mengakses halaman ini
+  // 2. Izinkan ANGGOTA mengakses halaman ini
   const currentUser = await requireRole([
     "SUPERADMIN",
     "SEKRETARIS",
@@ -19,25 +20,26 @@ export default async function SimpananPage({
 
   const search = searchParams?.search || "";
   
-  // 2. Ambil data menggunakan fungsi yang sudah Anda buat
-  const { data: allAnggotaList } = await getAllSaldoSimpanan(search);
-  const anggotaList = allAnggotaList || [];
-
-  // 3. Pisahkan logika tampilan berdasarkan role
+  // 3. Pisahkan logika peran
   const isPengurus = ["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"].includes(currentUser.role);
   const canInput = ["SUPERADMIN", "BENDAHARA"].includes(currentUser.role);
 
+  let anggotaList = [];
   let totalSaldo = 0;
   let dataSimpananPribadi = null;
 
+  // 4. PANGGIL FUNGSI DATABASE BERDASARKAN ROLE (Ini kuncinya!)
   if (isPengurus) {
-    // Hitung total saldo semua anggota untuk Pengurus
+    // Jika Pengurus: Tarik semua data anggota
+    const { data } = await getAllSaldoSimpanan(search);
+    anggotaList = data || [];
     totalSaldo = anggotaList.reduce((sum: number, a: any) => {
       return sum + Number(a.saldo_simpanan?.[0]?.total_saldo || 0);
     }, 0);
   } else {
-    // Cari data spesifik untuk Anggota yang sedang login
-    dataSimpananPribadi = anggotaList.find((a: any) => a.id === currentUser.id) || null;
+    // Jika Anggota: HANYA tarik data pribadinya menggunakan getSaldoByUserId
+    const { data } = await getSaldoByUserId(currentUser.id);
+    dataSimpananPribadi = data;
   }
 
   return (
@@ -247,8 +249,9 @@ export default async function SimpananPage({
               Total Saldo Aktif
             </h2>
             
+            {/* 5. MENYESUAIKAN CARA PEMANGGILAN DATA SALDO DARI getSaldoByUserId */}
             <div style={{ fontSize: "36px", fontWeight: "800", color: "#16a34a", marginBottom: "24px" }}>
-              Rp {Number(dataSimpananPribadi?.saldo_simpanan?.[0]?.total_saldo || 0).toLocaleString("id-ID")}
+              Rp {Number(dataSimpananPribadi?.saldo?.total_saldo || 0).toLocaleString("id-ID")}
             </div>
 
             <hr style={{ border: "none", borderTop: "1px dashed #e2e8f0", margin: "24px 0" }} />
