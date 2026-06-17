@@ -25,7 +25,7 @@ export function SetoranMassalForm({
     e.preventDefault();
     if (
       !confirm(
-        `Proses setoran bulanan untuk ${BULAN[bulan - 1]} ${tahun}?\n\nSemua anggota aktif akan diproses sekaligus.`
+        `Proses pemotongan Payroll (Wajib & Sukarela) untuk ${BULAN[bulan - 1]} ${tahun}?\n\nSemua anggota aktif akan diproses sekaligus sesuai nominal profil mereka.`
       )
     ) {
       return;
@@ -142,7 +142,8 @@ export function SetoranMassalForm({
             alignItems: "flex-start", 
             gap: "12px", 
             fontSize: "14px", 
-            fontWeight: "500" 
+            fontWeight: "500",
+            lineHeight: "1.5"
           }}>
             <div style={{ flexShrink: 0, marginTop: "2px" }}>
               {result.success ? (
@@ -151,23 +152,8 @@ export function SetoranMassalForm({
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               )}
             </div>
-            <div style={{ width: "100%" }}>
-              <div style={{ fontWeight: "600", fontSize: "15px", marginBottom: result.success ? "8px" : "0" }}>
-                {result.message}
-              </div>
-              {result.success && (
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px", color: "#166534", backgroundColor: "#dcfce7", padding: "8px 12px", borderRadius: "6px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    Berhasil: <strong style={{ fontWeight: "700" }}>{result.berhasil}</strong> anggota
-                  </div>
-                  <span style={{ opacity: 0.5 }}>|</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#991b1b" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    Gagal: <strong style={{ fontWeight: "700" }}>{result.gagal}</strong> anggota
-                  </div>
-                </div>
-              )}
+            <div style={{ width: "100%", fontWeight: "600", fontSize: "14px" }}>
+              {result.message}
             </div>
           </div>
         )}
@@ -228,8 +214,7 @@ export function SetoranMassalForm({
             </svg>
           </div>
           <div style={{ fontSize: "14px", color: "#475569", lineHeight: "1.6" }}>
-            <strong style={{ color: "#334155", fontWeight: "700" }}>Preview:</strong> Akan memproses setoran wajib
-            bulan{" "}
+            <strong style={{ color: "#334155", fontWeight: "700" }}>Preview:</strong> Akan memproses pemotongan Simpanan Wajib & Sukarela bulan{" "}
             <strong style={{ color: "#1d4ed8", fontWeight: "700" }}>
               {BULAN[bulan - 1]} {tahun}
             </strong>{" "}
@@ -247,7 +232,7 @@ export function SetoranMassalForm({
           {loading ? (
             <>
               <span className="spinner-icon"></span>
-              <span>Memproses semua anggota...</span>
+              <span>Memproses Payroll...</span>
             </>
           ) : (
             <>
@@ -258,7 +243,7 @@ export function SetoranMassalForm({
                 <line x1="3" y1="10" x2="21" y2="10"/>
               </svg>
               <span>
-                Proses Setoran {BULAN[bulan - 1]} {tahun}
+                Proses Payroll {BULAN[bulan - 1]} {tahun}
               </span>
             </>
           )}
