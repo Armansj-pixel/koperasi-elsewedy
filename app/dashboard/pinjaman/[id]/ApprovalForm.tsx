@@ -37,6 +37,7 @@ export default function ApprovalForm({ pinjamanId, currentStatus, userRole }: Ap
       alert('Alasan penolakan wajib diisi')
       return
     }
+    setAction(selectedAction)
 
     const formData = new FormData()
     formData.set('pinjaman_id', String(pinjamanId))
@@ -47,119 +48,43 @@ export default function ApprovalForm({ pinjamanId, currentStatus, userRole }: Ap
   }
 
   return (
-    <>
-      <style dangerouslySetInnerHTML={{ __html: `
-        .fintech-textarea {
-          width: 100%;
-          padding: 10px 14px;
-          border-radius: 8px;
-          border: 1px solid #d1d5db;
-          font-size: 14px;
-          transition: all 0.2s ease;
-          background-color: #fff;
-          color: #1f2937;
-          resize: vertical;
-        }
-        .fintech-textarea:focus {
-          outline: none;
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-        }
-        .fintech-btn-reject {
-          flex: 1;
-          padding: 10px 0;
-          background-color: #fff;
-          border: 2px solid #fca5a5;
-          color: #b91c1c;
-          border-radius: 8px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        }
-        .fintech-btn-reject:hover:not(:disabled) {
-          background-color: #fef2f2;
-        }
-        .fintech-btn-reject:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .fintech-btn-approve {
-          flex: 1;
-          padding: 10px 0;
-          background-color: #16a34a;
-          border: none;
-          color: #fff;
-          border-radius: 8px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        }
-        .fintech-btn-approve:hover:not(:disabled) {
-          background-color: #15803d;
-        }
-        .fintech-btn-approve:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-      `}} />
-      <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '2px solid #dbeafe', padding: '20px' }}>
-        <p style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '600', color: '#1e3a8a' }}>
-          Aksi Persetujuan — {userRole} (Level {level})
-        </p>
-        <p style={{ margin: '0 0 16px 0', fontSize: '12px', color: '#6b7280', lineHeight: '1.5' }}>
-          Tinjau detail pinjaman di atas sebelum menyetujui atau menolak.
-        </p>
+    <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/40 border border-teal-100 p-5">
+      <p className="text-sm font-bold text-slate-800 mb-1">
+        Aksi Persetujuan
+      </p>
+      <p className="text-xs text-slate-400 mb-4">
+        {userRole} · Level {level} — tinjau detail di atas sebelum memutuskan
+      </p>
 
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-            Catatan {action === 'reject' ? <span style={{ color: '#ef4444' }}>*</span> : <span style={{ color: '#9ca3af' }}>(opsional)</span>}
-          </label>
-          <textarea
-            rows={3}
-            value={catatan}
-            onChange={(e) => setCatatan(e.target.value)}
-            placeholder={action === 'reject' ? 'Tuliskan alasan penolakan...' : 'Catatan tambahan (opsional)...'}
-            className="fintech-textarea"
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button
-            onClick={() => handleSubmit('reject')}
-            disabled={isPending}
-            className="fintech-btn-reject"
-          >
-            {isPending && action === 'reject' ? 'Memproses...' : (
-              <>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                Tolak Pinjaman
-              </>
-            )}
-          </button>
-          <button
-            onClick={() => handleSubmit('approve')}
-            disabled={isPending}
-            className="fintech-btn-approve"
-          >
-            {isPending && action === 'approve' ? 'Memproses...' : (
-              <>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Setujui Pinjaman
-              </>
-            )}
-          </button>
-        </div>
+      <div className="mb-4">
+        <label className="block text-sm font-semibold text-slate-700 mb-2">
+          Catatan {action === 'reject' ? <span className="text-rose-500">*</span> : <span className="text-slate-400 font-normal">(opsional)</span>}
+        </label>
+        <textarea
+          rows={3}
+          value={catatan}
+          onChange={(e) => setCatatan(e.target.value)}
+          placeholder={action === 'reject' ? 'Tuliskan alasan penolakan...' : 'Catatan tambahan...'}
+          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-teal-500"
+        />
       </div>
-    </>
+
+      <div className="flex gap-3">
+        <button
+          onClick={() => handleSubmit('reject')}
+          disabled={isPending}
+          className="flex-1 py-3 bg-white border-2 border-rose-200 text-rose-600 rounded-2xl text-sm font-semibold disabled:opacity-50 active:scale-95 transition"
+        >
+          {isPending && action === 'reject' ? 'Memproses...' : '✗ Tolak'}
+        </button>
+        <button
+          onClick={() => handleSubmit('approve')}
+          disabled={isPending}
+          className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-semibold shadow-lg shadow-emerald-200/50 disabled:opacity-50 active:scale-95 transition"
+        >
+          {isPending && action === 'approve' ? 'Memproses...' : '✓ Setujui'}
+        </button>
+      </div>
+    </div>
   )
 }
