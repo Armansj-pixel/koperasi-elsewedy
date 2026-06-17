@@ -199,7 +199,9 @@ model User {
   passwordHash        String    @map("password_hash") @db.Text
   mustChangePassword  Boolean   @default(true) @map("must_change_password")
   role                UserRole  @default(ANGGOTA)
-  simpananBulanan     Decimal   @default(0) @map("simpanan_bulanan") @db.Decimal(15, 2)
+    // Hapus baris simpananBulanan yang lama, ganti dengan dua ini:
+  simpananWajibBulanan    Decimal   @default(0) @map("simpanan_wajib_bulanan") @db.Decimal(15, 2)
+  simpananSukarelaBulanan Decimal   @default(0) @map("simpanan_sukarela_bulanan") @db.Decimal(15, 2)
   tanggalBergabung    DateTime  @default(now()) @map("tanggal_bergabung") @db.Date
   isActive            Boolean   @default(true) @map("is_active")
   lastLoginAt         DateTime? @map("last_login_at")
