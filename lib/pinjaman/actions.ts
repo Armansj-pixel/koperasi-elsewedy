@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/auth/session'
+import { requireRole } from '@/lib/auth/session'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
@@ -232,8 +232,7 @@ const AjukanPinjamanSchema = z.object({
 })
 
 export async function ajukanPinjaman(formData: FormData) {
-  const session = await getCurrentUser()
-  if (!session) redirect('/login')
+  const session = await requireRole(['ANGGOTA'])
 
   const nominalRaw = (formData.get('nominal') as string) ?? ''
   const nominal = parseInt(nominalRaw.replace(/\D/g, ''))
@@ -287,8 +286,7 @@ export async function ajukanPinjaman(formData: FormData) {
 // ─── ACTION: Approve / Reject Pinjaman ───────────────────────────────────────
 
 export async function approvePinjaman(formData: FormData) {
-  const session = await getCurrentUser()
-  if (!session) redirect('/login')
+  const session = await requireRole(['SEKRETARIS', 'BENDAHARA', 'KETUA'])
 
   const pinjamanId = parseInt(formData.get('pinjaman_id') as string)
   const action = formData.get('action') as 'approve' | 'reject'
@@ -383,8 +381,7 @@ export async function approvePinjaman(formData: FormData) {
 // ─── ACTION: Cairkan Pinjaman ─────────────────────────────────────────────────
 
 export async function cairkanPinjaman(formData: FormData) {
-  const session = await getCurrentUser()
-  if (!session || session.role !== 'BENDAHARA') redirect('/login')
+  const session = await requireRole(['BENDAHARA'])
 
   const pinjamanId = parseInt(formData.get('pinjaman_id') as string)
   const tanggalCairan = formData.get('tanggal_pencairan') as string
@@ -447,8 +444,7 @@ export async function cairkanPinjaman(formData: FormData) {
 // ─── ACTION: Bayar Cicilan ────────────────────────────────────────────────────
 
 export async function bayarCicilan(formData: FormData) {
-  const session = await getCurrentUser()
-  if (!session) redirect('/login')
+  const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
 
   const cicilanId = parseInt(formData.get('cicilan_id') as string)
   const pinjamanId = parseInt(formData.get('pinjaman_id') as string)
@@ -502,10 +498,7 @@ const PinjamanExistingSchema = z.object({
 })
 
 export async function inputPinjamanExisting(formData: FormData) {
-  const session = await getCurrentUser()
-  if (!session || !['BENDAHARA', 'SUPERADMIN'].includes(session.role)) {
-    redirect('/login')
-  }
+  const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
 
   const nominalRaw = (formData.get('nominal') as string) ?? ''
   const nominal = parseInt(nominalRaw.replace(/\D/g, ''))
