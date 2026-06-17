@@ -232,10 +232,11 @@ const AjukanPinjamanSchema = z.object({
 })
 
 export async function ajukanPinjaman(formData: FormData) {
-  const session = await getCurrentUser() 
+  const session = await getCurrentUser()
   if (!session) redirect('/login')
 
-  const nominal = parseInt(formData.get('nominal') as string)
+  const nominalRaw = (formData.get('nominal') as string) ?? ''
+  const nominal = parseInt(nominalRaw.replace(/\D/g, ''))
   const tenor = parseInt(formData.get('tenor_bulan') as string)
 
   const parsed = AjukanPinjamanSchema.safeParse({
@@ -286,7 +287,7 @@ export async function ajukanPinjaman(formData: FormData) {
 // ─── ACTION: Approve / Reject Pinjaman ───────────────────────────────────────
 
 export async function approvePinjaman(formData: FormData) {
-  const session = await getCurrentUser()  
+  const session = await getCurrentUser()
   if (!session) redirect('/login')
 
   const pinjamanId = parseInt(formData.get('pinjaman_id') as string)
@@ -382,7 +383,7 @@ export async function approvePinjaman(formData: FormData) {
 // ─── ACTION: Cairkan Pinjaman ─────────────────────────────────────────────────
 
 export async function cairkanPinjaman(formData: FormData) {
-  const session = await getCurrentUser()  
+  const session = await getCurrentUser()
   if (!session || session.role !== 'BENDAHARA') redirect('/login')
 
   const pinjamanId = parseInt(formData.get('pinjaman_id') as string)
@@ -502,12 +503,12 @@ const PinjamanExistingSchema = z.object({
 
 export async function inputPinjamanExisting(formData: FormData) {
   const session = await getCurrentUser()
-  
   if (!session || !['BENDAHARA', 'SUPERADMIN'].includes(session.role)) {
     redirect('/login')
   }
 
-  const nominal = parseInt(formData.get('nominal') as string)
+  const nominalRaw = (formData.get('nominal') as string) ?? ''
+  const nominal = parseInt(nominalRaw.replace(/\D/g, ''))
   const tenor = parseInt(formData.get('tenor_bulan') as string)
   const cicilan_terbayar = parseInt(formData.get('cicilan_terbayar') as string) || 0
   const tanggal_pencairan = formData.get('tanggal_pencairan') as string
