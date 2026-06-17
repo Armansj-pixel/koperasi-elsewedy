@@ -16,20 +16,17 @@ export default function LoginPage() {
           pointer-events: none;
         }
 
-        /* logo icon hover */
-        .lp-logo-icon {
-          display: inline-flex; align-items: center; justify-content: center;
-          width: 80px; height: 80px;
-          border-radius: 24px;
-          background: rgba(255,255,255,.08);
-          border: 1px solid rgba(255,255,255,.15);
-          font-size: 36px;
+        /* logo image styling */
+        .lp-logo-img {
+          display: block;
+          width: 160px; /* Anda bisa menyesuaikan ukuran logo di sini */
+          height: auto;
+          border-radius: 16px; /* Memberikan sudut membulat pada background putih logo */
           margin-bottom: 20px;
           box-shadow: 0 8px 32px rgba(37,99,235,.25);
-          transform: rotate(-3deg);
           transition: transform .3s;
         }
-        .lp-logo-icon:hover { transform: rotate(0deg); }
+        .lp-logo-img:hover { transform: translateY(-4px); }
 
         /* card top stripe */
         .lp-card { position: relative; overflow: hidden; }
@@ -123,8 +120,11 @@ export default function LoginPage() {
         <div className="w-full max-w-sm relative z-10 flex flex-col items-center">
 
           {/* LOGO */}
-          <div style={{ textAlign: 'center', marginBottom: 28 }}>
-            <div className="lp-logo-icon">🏦</div>
+          <div style={{ textAlign: 'center', marginBottom: 28, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {/* Ganti '/logo.jpg' dengan path yang sesuai jika Anda menggunakan folder assets */}
+            <img src="/logo.jpg" alt="Logo Koperasi" className="lp-logo-img" />
+            
+            {/* Jika Anda merasa teks di dalam logo sudah cukup jelas, Anda bisa menghapus elemen <h1> dan <p> di bawah ini */}
             <h1 style={{ fontSize: 24, fontWeight: 800, color: '#fff', letterSpacing: '-.03em', marginBottom: 6 }}>
               Koperasi Karyawan
             </h1>
