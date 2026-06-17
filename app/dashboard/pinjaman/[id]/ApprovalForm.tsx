@@ -1,90 +1,119 @@
-'use client'
+"use client";
 
-import { useState, useTransition } from 'react'
-import { approvePinjaman } from '@/lib/pinjaman/actions'
+import React, { useState, useTransition } from "react";
+import { approvePinjaman } from "@/lib/pinjaman/actions";
 
 interface ApprovalFormProps {
-  pinjamanId: number
-  currentStatus: string
-  userRole: string
+  pinjamanId: number;
+  currentStatus: string;
+  userRole: string;
 }
 
 const ROLE_LEVEL: Record<string, string> = {
-  SEKRETARIS: 'L1',
-  BENDAHARA: 'L2',
-  KETUA: 'L3',
-}
+  SEKRETARIS: "L1",
+  BENDAHARA: "L2",
+  KETUA: "L3",
+};
 
 export default function ApprovalForm({ pinjamanId, currentStatus, userRole }: ApprovalFormProps) {
-  const [isPending, startTransition] = useTransition()
-  const [action, setAction] = useState<'approve' | 'reject' | null>(null)
-  const [catatan, setCatatan] = useState('')
+  const [isPending, startTransition] = useTransition();
+  const [action, setAction] = useState<"approve" | "reject" | null>(null);
+  const [catatan, setCatatan] = useState("");
 
-  const level = ROLE_LEVEL[userRole]
+  const level = ROLE_LEVEL[userRole];
 
   const STATUS_CAN_APPROVE: Record<string, string> = {
-    SEKRETARIS: 'PENDING_L1',
-    BENDAHARA: 'PENDING_L2',
-    KETUA: 'PENDING_L3',
-  }
+    SEKRETARIS: "PENDING_L1",
+    BENDAHARA: "PENDING_L2",
+    KETUA: "PENDING_L3",
+  };
 
-  const canApprove = STATUS_CAN_APPROVE[userRole] === currentStatus
+  const canApprove = STATUS_CAN_APPROVE[userRole] === currentStatus;
 
-  if (!canApprove) return null
+  if (!canApprove) return null;
 
-  function handleSubmit(selectedAction: 'approve' | 'reject') {
-    if (selectedAction === 'reject' && !catatan.trim()) {
-      alert('Alasan penolakan wajib diisi')
-      return
+  function handleSubmit(selectedAction: "approve" | "reject") {
+    if (selectedAction === "reject" && !catatan.trim()) {
+      alert("Alasan penolakan wajib diisi");
+      return;
     }
-    setAction(selectedAction)
+    setAction(selectedAction);
 
-    const formData = new FormData()
-    formData.set('pinjaman_id', String(pinjamanId))
-    formData.set('action', selectedAction)
-    formData.set('catatan', catatan)
+    const formData = new FormData();
+    formData.set("pinjaman_id", String(pinjamanId));
+    formData.set("action", selectedAction);
+    formData.set("catatan", catatan);
 
-    startTransition(() => approvePinjaman(formData))
+    startTransition(() => approvePinjaman(formData));
   }
 
   return (
-    <div className="bg-white rounded-3xl shadow-lg shadow-slate-200/40 border border-teal-100 p-5">
-      <p className="text-sm font-bold text-slate-800 mb-1">
+    <div className="card-fintech" style={{ borderColor: "#dbeafe" }}>
+      <div style={{ fontWeight: "700", fontSize: "15px", color: "#0f2d6b", marginBottom: "2px" }}>
         Aksi Persetujuan
-      </p>
-      <p className="text-xs text-slate-400 mb-4">
+      </div>
+      <div style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "16px" }}>
         {userRole} · Level {level} — tinjau detail di atas sebelum memutuskan
-      </p>
+      </div>
 
-      <div className="mb-4">
-        <label className="block text-sm font-semibold text-slate-700 mb-2">
-          Catatan {action === 'reject' ? <span className="text-rose-500">*</span> : <span className="text-slate-400 font-normal">(opsional)</span>}
+      <div style={{ marginBottom: "16px" }}>
+        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#1e293b", marginBottom: "8px" }}>
+          Catatan{" "}
+          {action === "reject" ? (
+            <span style={{ color: "#dc2626" }}>*</span>
+          ) : (
+            <span style={{ color: "#94a3b8", fontWeight: "400" }}>(opsional)</span>
+          )}
         </label>
         <textarea
           rows={3}
           value={catatan}
           onChange={(e) => setCatatan(e.target.value)}
-          placeholder={action === 'reject' ? 'Tuliskan alasan penolakan...' : 'Catatan tambahan...'}
-          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-teal-500"
+          placeholder={action === "reject" ? "Tuliskan alasan penolakan..." : "Catatan tambahan..."}
+          className="fintech-input"
+          style={{ resize: "vertical" }}
         />
       </div>
 
-      <div className="flex gap-3">
+      <div style={{ display: "flex", gap: "12px" }}>
         <button
-          onClick={() => handleSubmit('reject')}
+          onClick={() => handleSubmit("reject")}
           disabled={isPending}
-          className="flex-1 py-3 bg-white border-2 border-rose-200 text-rose-600 rounded-2xl text-sm font-semibold disabled:opacity-50 active:scale-95 transition"
+          style={{
+            flex: 1,
+            padding: "12px 0",
+            background: "#fff",
+            border: "1px solid #fecaca",
+            color: "#dc2626",
+            borderRadius: "12px",
+            fontSize: "14px",
+            fontWeight: "600",
+            cursor: isPending ? "not-allowed" : "pointer",
+            opacity: isPending ? 0.6 : 1,
+          }}
         >
-          {isPending && action === 'reject' ? 'Memproses...' : '✗ Tolak'}
+          {isPending && action === "reject" ? "Memproses..." : "✗ Tolak"}
         </button>
         <button
-          onClick={() => handleSubmit('approve')}
+          onClick={() => handleSubmit("approve")}
           disabled={isPending}
-          className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-semibold shadow-lg shadow-emerald-200/50 disabled:opacity-50 active:scale-95 transition"
+          style={{
+            flex: 1,
+            padding: "12px 0",
+            background: "#16a34a",
+            border: "none",
+            color: "#fff",
+            borderRadius: "12px",
+            fontSize: "14px",
+            fontWeight: "600",
+            cursor: isPending ? "not-allowed" : "pointer",
+            opacity: isPending ? 0.6 : 1,
+            boxShadow: "0 4px 12px rgba(22,163,74,0.25)",
+          }}
         >
-          {isPending && action === 'approve' ? 'Memproses...' : '✓ Setujui'}
+          {isPending && action === "approve" ? "Memproses..." : "✓ Setujui"}
         </button>
       </div>
     </div>
-  )
+  );
 }
