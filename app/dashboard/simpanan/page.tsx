@@ -190,7 +190,7 @@ export default async function SimpananPage({
               </div>
               <div className="card-fintech" style={{ padding: "20px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
                 <div style={{ fontSize: "28px", fontWeight: "700", color: "#16a34a", lineHeight: 1.2 }}>Rp {totalSaldo.toLocaleString("id-ID")}</div>
-                <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Saldo Simpanan</div>
+                <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Saldo Keseluruhan</div>
               </div>
               <div className="card-fintech" style={{ padding: "20px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
                 <div style={{ fontSize: "28px", fontWeight: "700", color: "#9333ea", lineHeight: 1.2 }}>
@@ -262,7 +262,7 @@ export default async function SimpananPage({
           </>
         ) : (
           /* ========================================= */
-          /* VIEW UNTUK ANGGOTA BIASA                    */
+          /* VIEW UNTUK ANGGOTA BIASA (Dengan Keranjang Terpisah) */
           /* ========================================= */
           <div className="card-fintech" style={{ padding: "32px", textAlign: "center", maxWidth: "500px", margin: "0 auto" }}>
             <div style={{ width: "64px", height: "64px", background: "#eff6ff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px auto", color: "#2563eb" }}>
@@ -272,17 +272,21 @@ export default async function SimpananPage({
             </div>
             
             <h2 style={{ fontSize: "14px", color: "#64748b", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px", fontWeight: "600" }}>
-              Total Saldo Aktif
+              Saldo Bisa Ditarik (Sukarela)
             </h2>
             
-            <div style={{ fontSize: "36px", fontWeight: "800", color: "#16a34a", marginBottom: "24px" }}>
-              Rp {Number(dataSimpananPribadi?.saldo?.total_saldo || 0).toLocaleString("id-ID")}
+            <div style={{ fontSize: "36px", fontWeight: "800", color: "#16a34a", marginBottom: "16px" }}>
+              Rp {Number(dataSimpananPribadi?.saldo?.saldo_sukarela || 0).toLocaleString("id-ID")}
             </div>
 
-            <hr style={{ border: "none", borderTop: "1px dashed #e2e8f0", margin: "24px 0" }} />
+            <div style={{ display: "inline-block", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "8px 16px", borderRadius: "12px", fontSize: "12px", color: "#64748b", marginBottom: "24px" }}>
+              <span style={{ fontWeight: "600" }}>Saldo Mengendap (Pokok & Wajib):</span> Rp {Number((dataSimpananPribadi?.saldo?.saldo_pokok || 0) + (dataSimpananPribadi?.saldo?.saldo_wajib || 0)).toLocaleString("id-ID")}
+            </div>
+
+            <hr style={{ border: "none", borderTop: "1px dashed #e2e8f0", margin: "0 0 24px 0" }} />
 
             <p style={{ fontSize: "13px", color: "#64748b", lineHeight: "1.6", marginBottom: "24px" }}>
-              Simpanan Anda dikelola secara aman. Jika Anda membutuhkan dana, Anda dapat mengajukan penarikan simpanan sesuai dengan syarat dan ketentuan Koperasi.
+              Simpanan Anda dikelola secara aman. Saldo sukarela dapat diajukan penarikannya sesuai dengan syarat dan ketentuan Koperasi.
             </p>
 
             <Link 
