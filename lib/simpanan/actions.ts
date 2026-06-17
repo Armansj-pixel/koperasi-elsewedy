@@ -103,9 +103,10 @@ export async function getAllSaldoSimpanan(search?: string) {
   await requireRole(["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"]);
   const supabase = createServiceClient();
 
+  // PERHATIAN: Di query ini kita sesuaikan untuk menarik data wajib dan sukarela jika diperlukan untuk tampilan
   let query = supabase
     .from("users")
-    .select("id, nik, nama, simpanan_bulanan, is_active")
+    .select("id, nik, nama, simpanan_wajib_bulanan, simpanan_sukarela_bulanan, is_active")
     .eq("is_active", true)
     .order("nama", { ascending: true });
 
@@ -158,7 +159,7 @@ export async function getSaldoByUserId(userId: string) {
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, nik, nama, simpanan_bulanan")
+    .select("id, nik, nama, simpanan_wajib_bulanan, simpanan_sukarela_bulanan")
     .eq("id", userId)
     .single();
 
@@ -186,7 +187,7 @@ export async function getRiwayatSimpanan(userId: string, limit: number = 20) {
 }
 
 // =====================================================================
-// INPUT SETORAN SIMPANAN
+// INPUT SETORAN SIMPANAN (MANUAL)
 // =====================================================================
 
 export async function inputSetoran(formData: FormData) {
@@ -230,7 +231,6 @@ export async function inputSetoran(formData: FormData) {
 
   if (insertError) return { success: false, error: insertError.message };
 
-  // Update menggunakan sistem keranjang yang baru
   const { error: saldoError } = await updateSaldo(
     supabase, 
     data.user_id, 
@@ -248,46 +248,112 @@ export async function inputSetoran(formData: FormData) {
 }
 
 // =====================================================================
-// SETORAN BULANAN MASSAL
+// SETORAN BULANAN MASSAL (POTONG GAJI - WAJIB & SUKARELA)
 // =====================================================================
 
 export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
   const currentUser = await requireRole(["SUPERADMIN", "BENDAHARA"]);
   const supabase = createServiceClient();
 
-  const { data: anggotaList, error } = await supabase.from("users").select("id, nama, nik, simpanan_bulanan").eq("is_active", true).gt("simpanan_bulanan", 0);
+  // 1. Ambil data anggota beserta settingan potongan wajib & sukarelanya
+  const { data: anggotaList, error } = await supabase
+    .from("users")
+    .select("id, nama, nik, simpanan_wajib_bulanan, simpanan_sukarela_bulanan")
+    .eq("is_active", true);
+
   if (error || !anggotaList) return { success: false, error: "Gagal ambil data anggota" };
 
-  const tanggal = `${tahun}-${String(bulan).padStart(2, "0")}-25`;
+  const tanggal = `${tahun}-${String(bulan).padStart(2, "0")}-25`; // Asumsi potong gaji tgl 25
   const periode = `${tahun}-${String(bulan).padStart(2, "0")}`;
   const namaBulan = new Date(tahun, bulan - 1).toLocaleString("id-ID", { month: "long", year: "numeric" });
 
-  let berhasil = 0; let gagal = 0; let dilewati = 0;
+  let berhasilWajib = 0;
+  let berhasilSukarela = 0;
+  let dilewati = 0;
+  let gagal = 0;
 
   for (const anggota of anggotaList) {
-    const { data: existing } = await supabase.from("simpanan").select("id").eq("user_id", anggota.id).eq("jenis", "SETORAN").eq("periode", periode).ilike("keterangan", "%simpanan wajib bulanan%").maybeSingle();
-    if (existing) { dilewati++; continue; }
+    const wajib = Number(anggota.simpanan_wajib_bulanan || 0);
+    const sukarela = Number(anggota.simpanan_sukarela_bulanan || 0);
 
-    const { error: insertError } = await supabase.from("simpanan").insert({
-      user_id: anggota.id,
-      jenis: "SETORAN",
-      nominal: anggota.simpanan_bulanan,
-      periode,
-      tanggal,
-      status: "APPROVED",
-      keterangan: `Simpanan wajib bulanan ${namaBulan}`,
-      created_by: currentUser.id,
-    });
+    if (wajib === 0 && sukarela === 0) continue; // Skip jika tidak ada potongan
 
-    if (insertError) { gagal++; continue; }
+    // --- PROSES POTONGAN SIMPANAN WAJIB ---
+    if (wajib > 0) {
+      const { data: existWajib } = await supabase
+        .from("simpanan")
+        .select("id")
+        .eq("user_id", anggota.id)
+        .eq("jenis", "SETORAN")
+        .eq("periode", periode)
+        .ilike("keterangan", "%Wajib Bulanan%")
+        .maybeSingle();
 
-    // Setoran bulanan massal selalu dianggap sebagai SIMPANAN_WAJIB
-    await updateSaldo(supabase, anggota.id, Number(anggota.simpanan_bulanan), "SIMPANAN_WAJIB");
-    berhasil++;
+      if (existWajib) {
+        dilewati++;
+      } else {
+        const { error: errWajib } = await supabase.from("simpanan").insert({
+          user_id: anggota.id,
+          jenis: "SETORAN",
+          nominal: wajib,
+          periode,
+          tanggal,
+          status: "APPROVED",
+          keterangan: `Simpanan Wajib Bulanan ${namaBulan}`,
+          created_by: currentUser.id,
+        });
+
+        if (!errWajib) {
+          await updateSaldo(supabase, anggota.id, wajib, "SIMPANAN_WAJIB");
+          berhasilWajib++;
+        } else {
+          gagal++;
+        }
+      }
+    }
+
+    // --- PROSES POTONGAN SIMPANAN SUKARELA ---
+    if (sukarela > 0) {
+      const { data: existSukarela } = await supabase
+        .from("simpanan")
+        .select("id")
+        .eq("user_id", anggota.id)
+        .eq("jenis", "SETORAN")
+        .eq("periode", periode)
+        .ilike("keterangan", "%Sukarela Bulanan%")
+        .maybeSingle();
+
+      if (existSukarela) {
+        // Jika sudah ada, lewati diam-diam (sudah dihitung di variabel 'dilewati' saat ngecek wajib)
+      } else {
+        const { error: errSukarela } = await supabase.from("simpanan").insert({
+          user_id: anggota.id,
+          jenis: "SETORAN",
+          nominal: sukarela,
+          periode,
+          tanggal,
+          status: "APPROVED",
+          keterangan: `Simpanan Sukarela Bulanan ${namaBulan}`,
+          created_by: currentUser.id,
+        });
+
+        if (!errSukarela) {
+          await updateSaldo(supabase, anggota.id, sukarela, "SIMPANAN_SUKARELA");
+          berhasilSukarela++;
+        } else {
+          gagal++;
+        }
+      }
+    }
   }
 
   revalidatePath("/dashboard/simpanan");
-  return { success: true, message: `✅ Setoran ${namaBulan} selesai! ${berhasil} berhasil, ${dilewati} dilewati, ${gagal} gagal.`, berhasil, dilewati, gagal };
+  revalidatePath("/dashboard/anggota");
+
+  return { 
+    success: true, 
+    message: `✅ Payroll ${namaBulan} selesai! Wajib: ${berhasilWajib}, Sukarela: ${berhasilSukarela}. Dilewati: ${dilewati}, Gagal: ${gagal}.` 
+  };
 }
 
 // =====================================================================
@@ -297,7 +363,6 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
 export async function ajukanPenarikan(formData: FormData) {
   const currentUser = await requireRole(["ANGGOTA", "SEKRETARIS", "BENDAHARA", "KETUA", "SUPERADMIN"]);
 
-  // PROTEKSI CUT-OFF
   if (currentUser.role === "ANGGOTA") {
     const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
     const currentMinute = (now.getHours() * 60) + now.getMinutes();
@@ -315,7 +380,6 @@ export async function ajukanPenarikan(formData: FormData) {
   const parsed = PenarikanSchema.safeParse(raw);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
-  // CEK HANYA DI KERANJANG SUKARELA
   const { data: saldo } = await supabase.from("saldo_simpanan").select("saldo_sukarela").eq("user_id", currentUser.id).single();
 
   if (!saldo || Number(saldo.saldo_sukarela) < parsed.data.nominal) {
@@ -358,7 +422,6 @@ export async function updateStatusPenarikan(penarikanId: string, status: "APPROV
   if (updateError) return { success: false, error: updateError.message };
 
   if (status === "APPROVED") {
-    // Kurangi dari Saldo Sukarela
     const { error: saldoError } = await updateSaldo(supabase, penarikan.user_id, Number(penarikan.nominal), "PENARIKAN");
     if (saldoError) return { success: false, error: "Gagal mengurangi saldo sukarela." };
 
