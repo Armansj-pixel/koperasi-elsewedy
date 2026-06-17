@@ -232,14 +232,21 @@ model User {
 }
 
 model SaldoSimpanan {
-  userId      String    @id @map("user_id") @db.Uuid
-  totalSaldo  Decimal   @default(0) @map("total_saldo") @db.Decimal(15, 2)
-  lastUpdated DateTime  @default(now()) @map("last_updated")
+  userId         String    @id @map("user_id") @db.Uuid
+  totalSaldo     Decimal   @default(0) @map("total_saldo") @db.Decimal(15, 2)
+  
+  // --- KERANJANG BARU ---
+  saldoPokok     Decimal   @default(0) @map("saldo_pokok") @db.Decimal(15, 2)
+  saldoWajib     Decimal   @default(0) @map("saldo_wajib") @db.Decimal(15, 2)
+  saldoSukarela  Decimal   @default(0) @map("saldo_sukarela") @db.Decimal(15, 2)
+  
+  lastUpdated    DateTime  @default(now()) @map("last_updated")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("saldo_simpanan")
 }
+
 
 model Simpanan {
   id          BigInt          @id @default(autoincrement())
