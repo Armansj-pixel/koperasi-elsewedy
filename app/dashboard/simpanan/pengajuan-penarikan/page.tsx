@@ -17,13 +17,11 @@ export default async function PengajuanPenarikanPage({
   // =====================================================================
   // LOGIKA CUT-OFF JAMINAN (Kamis 09:00 - 15:00 WIB)
   // =====================================================================
-  // Ambil waktu saat ini berdasarkan Zona Waktu Lokal Asia/Jakarta (WIB)
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
-  const dayOfWeek = now.getDay(); // 0 = Minggu, 4 = Kamis, 6 = Sabtu
+  const dayOfWeek = now.getDay(); 
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
 
-  // Konversi jam ke menit dari tengah malam agar pengecekan lebih presisi
   const currentTimeInMinutes = (currentHour * 60) + currentMinute;
   const cutOffStart = (9 * 60);  // Jam 09:00 = 540 menit
   const cutOffEnd = (15 * 60);   // Jam 15:00 = 900 menit
@@ -37,7 +35,9 @@ export default async function PengajuanPenarikanPage({
 
   // Ambil saldo saat ini
   const { data } = await getSaldoByUserId(currentUser.id);
-  const totalSaldo = Number(data?.saldo?.total_saldo || 0);
+  
+  // PERUBAHAN: Sekarang form ini HANYA membaca dari saldo_sukarela, bukan total_saldo lagi
+  const saldoSukarelaTersedia = Number(data?.saldo?.saldo_sukarela || 0);
 
   async function submitPenarikan(formData: FormData) {
     "use server";
@@ -109,8 +109,12 @@ export default async function PengajuanPenarikanPage({
             /* TAMPILKAN FORMULIR NORMAL JIKA DI LUAR JAM CUT-OFF ATAU YANG MASUK ADALAH PENGURUS */
             <form action={submitPenarikan}>
               <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "16px", borderRadius: "12px", marginBottom: "24px", textAlign: "center" }}>
-                <div style={{ fontSize: "12px", color: "#166534", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Saldo Tersedia</div>
-                <div style={{ fontSize: "24px", fontWeight: "800", color: "#15803d" }}>Rp {totalSaldo.toLocaleString("id-ID")}</div>
+                <div style={{ fontSize: "12px", color: "#166534", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>
+                  Saldo Sukarela Tersedia
+                </div>
+                <div style={{ fontSize: "24px", fontWeight: "800", color: "#15803d" }}>
+                  Rp {saldoSukarelaTersedia.toLocaleString("id-ID")}
+                </div>
               </div>
 
               {searchParams.error && (
@@ -121,15 +125,42 @@ export default async function PengajuanPenarikanPage({
 
               <div style={{ marginBottom: "20px" }}>
                 <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>Nominal Penarikan (Rp)</label>
-                <input type="number" name="nominal" style={{ width: "100%", padding: "14px", borderRadius: "12px", border: "1.5px solid #e2e8f0" }} placeholder="Contoh: 500000" min="10000" max={totalSaldo} required />
+                <input 
+                  type="number" 
+                  name="nominal" 
+                  style={{ width: "100%", padding: "14px", borderRadius: "12px", border: "1.5px solid #e2e8f0" }} 
+                  placeholder="Contoh: 500000" 
+                  min="10000" 
+                  max={saldoSukarelaTersedia} 
+                  required 
+                />
               </div>
 
               <div style={{ marginBottom: "20px" }}>
                 <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>Catatan / Keperluan (Opsional)</label>
-                <textarea name="catatan" style={{ width: "100%", padding: "14px", borderRadius: "12px", border: "1.5px solid #e2e8f0" }} placeholder="Contoh: Biaya pendidikan anak" rows={3}></textarea>
+                <textarea 
+                  name="catatan" 
+                  style={{ width: "100%", padding: "14px", borderRadius: "12px", border: "1.5px solid #e2e8f0" }} 
+                  placeholder="Contoh: Biaya pendidikan anak" 
+                  rows={3}
+                ></textarea>
               </div>
 
-              <button type="submit" className="btn-submit">Kirim Pengajuan</button>
+              {/* Jika saldo sukarela kurang dari batas minimal penarikan (misal Rp 10.000), disable tombolnya */}
+              <button 
+                type="submit" 
+                className="btn-submit"
+                disabled={saldoSukarelaTersedia < 10000}
+                style={{ opacity: saldoSukarelaTersedia < 10000 ? 0.5 : 1, cursor: saldoSukarelaTersedia < 10000 ? "not-allowed" : "pointer" }}
+              >
+                Kirim Pengajuan
+              </button>
+              
+              {saldoSukarelaTersedia < 10000 && (
+                <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "12px", textAlign: "center", fontWeight: "500" }}>
+                  Saldo sukarela Anda tidak mencukupi untuk melakukan penarikan (Min. Rp 10.000).
+                </p>
+              )}
             </form>
           )}
 
