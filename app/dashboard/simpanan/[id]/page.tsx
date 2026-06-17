@@ -54,12 +54,11 @@ export default async function DetailSimpananPage({
 }: {
   params: { id: string };
 }) {
-  // 1. TAMBAHKAN ANGGOTA KE DAFTAR IZIN
   const currentUser = await requireRole([
     "SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA", "ANGGOTA"
   ]);
 
-  // 2. PROTEKSI PRIVASI: Cegah Anggota mengintip ID orang lain
+  // PROTEKSI PRIVASI: Cegah Anggota mengintip ID orang lain
   if (currentUser.role === "ANGGOTA" && currentUser.id !== params.id) {
     redirect("/dashboard/simpanan");
   }
@@ -295,8 +294,14 @@ export default async function DetailSimpananPage({
               <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
                 <p style={{ margin: 0, color: "#64748b", fontSize: "13px", fontFamily: "monospace" }}>NIK: {user?.nik}</p>
                 <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "#cbd5e1" }}></span>
+                
+                {/* INI BAGIAN YANG DIPERBAIKI (Membaca Wajib & Sukarela) */}
                 <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
-                  Setoran bulanan: Rp {Number(user?.simpanan_bulanan).toLocaleString("id-ID")}
+                  Wajib: Rp {Number(user?.simpanan_wajib_bulanan || 0).toLocaleString("id-ID")}
+                </p>
+                <span style={{ width: "4px", height: "4px", borderRadius: "50%", background: "#cbd5e1" }}></span>
+                <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
+                  Sukarela: Rp {Number(user?.simpanan_sukarela_bulanan || 0).toLocaleString("id-ID")}
                 </p>
               </div>
             </div>
@@ -306,7 +311,7 @@ export default async function DetailSimpananPage({
           <div style={{ padding: "24px", borderBottom: "1px solid #f1f5f9", background: "#fafafa" }}>
             <p style={{ margin: "0 0 8px 0", fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
-              Total Saldo Simpanan
+              Total Saldo Keseluruhan
             </p>
             <p style={{ margin: 0, fontSize: "36px", color: "#16a34a", fontWeight: "800", letterSpacing: "-0.5px" }}>
               Rp {Number(saldo?.total_saldo || 0).toLocaleString("id-ID")}
@@ -431,7 +436,6 @@ export default async function DetailSimpananPage({
             Kembali
           </Link>
           <Link 
-            // Arahkan ke /dashboard/profil jika ini data miliknya sendiri, kalau pengurus melihat data orang lain arahkan ke detail anggota
             href={isOwner ? "/dashboard/profil" : `/dashboard/anggota/${params.id}`} 
             className="fintech-btn-primary"
           >
