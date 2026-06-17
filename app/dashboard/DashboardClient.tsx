@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { logoutAction } from "@/lib/auth/actions";
 import type { CurrentUser } from "@/lib/auth/session";
@@ -54,17 +54,13 @@ const modules = [
 
 export function DashboardClient({ user }: { user: CurrentUser }) {
   const [loggingOut, setLoggingOut] = useState(false);
-  
-  // 1. STATE UNTUK SWITCH MODE
   const [isMemberMode, setIsMemberMode] = useState(false);
 
-  // Cek apakah user adalah pengurus
+  // 1. Cek role dan tentukan role efektif berdasarkan Switch Mode
   const isPengurus = ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"].includes(user.role);
-
-  // 2. TENTUKAN ROLE EFEKTIF SAAT INI (Jika tombol ditekan, role dianggap ANGGOTA)
   const effectiveRole = (isPengurus && isMemberMode) ? "ANGGOTA" : user.role;
 
-  // 3. FILTER MODULES BERDASARKAN ROLE EFEKTIF
+  // 2. Filter menu yang boleh tampil
   const allowedModules = modules.filter(module => 
     module.allowedRoles.includes(effectiveRole)
   );
@@ -74,104 +70,35 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
     try {
       await logoutAction();
     } catch (error) {
-      // Next.js redirect() throws internally, abaikan error ini
+      // Abaikan error redirect internal dari Next.js
     } finally {
       setLoggingOut(false);
     }
   }
 
-  // Menghindari penggunaan Fragment (<>) di level root untuk mencegah error SWC
   return (
-    <main className="kop-shell min-h-screen bg-slate-100 flex justify-center">
-      {/* ── GLOBAL STYLES ── */}
-      <style>{`
+    <div className="kop-shell min-h-screen bg-slate-100 flex justify-center">
+      {/* MENGGUNAKAN DANGEROUSLY SET INNER HTML AGAR VERCEL SWC TIDAK ERROR */}
+      <style dangerouslySetInnerHTML={{ __html: `
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
         .kop-shell { font-family: 'Inter', sans-serif; }
-
-        .kop-header {
-          background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%);
-          padding: 48px 24px 80px;
-          position: relative;
-          overflow: hidden;
-        }
-        .kop-header::before {
-          content: '';
-          position: absolute;
-          top: -60px; right: -40px;
-          width: 200px; height: 200px;
-          background: radial-gradient(circle, rgba(255,255,255,.12) 0%, transparent 70%);
-          border-radius: 50%;
-          pointer-events: none;
-        }
-        .kop-header::after {
-          content: '';
-          position: absolute;
-          bottom: 20px; left: -30px;
-          width: 140px; height: 140px;
-          background: radial-gradient(circle, rgba(59,130,246,.25) 0%, transparent 70%);
-          border-radius: 50%;
-          pointer-events: none;
-        }
-
-        .kop-logout-btn {
-          width: 40px; height: 40px;
-          border-radius: 50%;
-          background: rgba(255,255,255,.15);
-          border: 1px solid rgba(255,255,255,.2);
-          display: flex; align-items: center; justify-content: center;
-          cursor: pointer;
-          transition: background .2s;
-          backdrop-filter: blur(8px);
-        }
+        .kop-header { background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%); padding: 48px 24px 80px; position: relative; overflow: hidden; }
+        .kop-header::before { content: ''; position: absolute; top: -60px; right: -40px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(255,255,255,.12) 0%, transparent 70%); border-radius: 50%; pointer-events: none; }
+        .kop-header::after { content: ''; position: absolute; bottom: 20px; left: -30px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(59,130,246,.25) 0%, transparent 70%); border-radius: 50%; pointer-events: none; }
+        .kop-logout-btn { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .2s; backdrop-filter: blur(8px); }
         .kop-logout-btn:hover { background: rgba(255,255,255,.25); }
         .kop-logout-btn:disabled { opacity: .6; cursor: not-allowed; }
-
-        .kop-card {
-          background: #ffffff;
-          border-radius: 24px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 4px 24px rgba(15,45,107,.07);
-        }
-
-        .kop-menu-icon {
-          width: 52px; height: 52px;
-          border-radius: 16px;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 22px;
-          position: relative;
-          transition: transform .2s, box-shadow .2s;
-        }
-        .kop-menu-link:hover .kop-menu-icon {
-          transform: translateY(-3px);
-          box-shadow: 0 8px 20px rgba(0,0,0,.12);
-        }
-
-        .kop-ping-ring {
-          position: absolute; inset: 0;
-          border-radius: 50%;
-          background: #3b82f6;
-          opacity: .4;
-          animation: kop-ping 1.4s ease-out infinite;
-        }
-        @keyframes kop-ping {
-          0%   { transform: scale(1); opacity: .4; }
-          70%  { transform: scale(2.2); opacity: 0; }
-          100% { opacity: 0; }
-        }
-
-        .kop-spin {
-          width: 18px; height: 18px;
-          border: 2px solid rgba(255,255,255,.3);
-          border-top-color: white;
-          border-radius: 50%;
-          animation: kop-spin .7s linear infinite;
-        }
+        .kop-card { background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(15,45,107,.07); }
+        .kop-menu-icon { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 22px; position: relative; transition: transform .2s, box-shadow .2s; }
+        .kop-menu-link:hover .kop-menu-icon { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,.12); }
+        .kop-ping-ring { position: absolute; inset: 0; border-radius: 50%; background: #3b82f6; opacity: .4; animation: kop-ping 1.4s ease-out infinite; }
+        @keyframes kop-ping { 0% { transform: scale(1); opacity: .4; } 70% { transform: scale(2.2); opacity: 0; } 100% { opacity: 0; } }
+        .kop-spin { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: kop-spin .7s linear infinite; }
         @keyframes kop-spin { to { transform: rotate(360deg); } }
-      `}</style>
+      `}} />
 
       <div className="w-full max-w-md bg-slate-100 min-h-screen relative sm:shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
-
+        
         {/* ── HEADER ── */}
         <div className="kop-header">
           <div className="flex justify-between items-center relative z-10">
@@ -184,19 +111,12 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
               </h1>
             </div>
 
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="kop-logout-btn"
-              aria-label="Logout"
-            >
+            <button onClick={handleLogout} disabled={loggingOut} className="kop-logout-btn" aria-label="Logout">
               {loggingOut ? (
                 <div className="kop-spin" />
               ) : (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                  <polyline points="16 17 21 12 16 7"/>
-                  <line x1="21" y1="12" x2="9" y2="12"/>
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
                 </svg>
               )}
             </button>
@@ -209,11 +129,9 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
           {/* ── PROFILE CARD ── */}
           <div className="kop-card" style={{ padding: 20, marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              {/* Avatar */}
               <div style={{ width: 52, height: 52, borderRadius: 16, background: 'linear-gradient(135deg,#dbeafe,#eff6ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #dbeafe', flexShrink: 0 }}>
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1a4db3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                 </svg>
               </div>
 
@@ -228,7 +146,6 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
               </div>
             </div>
 
-            {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div style={{ background: '#f1f5f9', borderRadius: 14, padding: '12px 14px', border: '1px solid #e2e8f0' }}>
                 <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94a3b8', marginBottom: 5 }}>NIK Karyawan</p>
@@ -244,7 +161,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
             </div>
           </div>
 
-          {/* ── 4. TOMBOL SWITCH MODE (KHUSUS PENGURUS) ── */}
+          {/* ── TOMBOL SWITCH MODE (KHUSUS PENGURUS) ── */}
           {isPengurus && (
             <div className="kop-card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isMemberMode ? '#f0fdf4' : '#fff', border: isMemberMode ? '1px solid #bbf7d0' : '1px solid #e2e8f0', transition: 'all 0.3s' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -285,7 +202,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px 4px' }}>
               {allowedModules.map((item, idx) => {
                 if (item.isActive) {
-                  // 5. JIKA SEDANG MODE ANGGOTA, ARAHKAN SIMPANAN/PINJAMAN LANGSUNG KE AKUN PRIBADINYA
+                  // Bypass link khusus jika sedang di Mode Anggota
                   let targetHref = item.href;
                   if (isPengurus && isMemberMode) {
                     if (item.label === "Simpanan") targetHref = `/dashboard/simpanan/${user.id}`;
@@ -339,6 +256,6 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
 
         </div>
       </div>
-    </main>
+    </div>
   );
 }
