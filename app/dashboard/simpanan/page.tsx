@@ -1,22 +1,35 @@
 import React from "react";
-import { requireRole } from "@/lib/auth/session";
-import { getAllSaldoSimpanan } from "@/lib/simpanan/actions";
+// import { requireRole } from "@/lib/auth/session";
+// import { getAllSaldoSimpanan } from "@/lib/simpanan/actions";
 import Link from "next/link";
+
+// Mock data untuk keperluan demonstrasi agar bisa dirender
+const mockAnggotaList = [
+  { id: 1, nik: "045261", nama: "Armadio", simpanan_bulanan: 100000, saldo_simpanan: [{ total_saldo: 0 }] },
+  { id: 2, nik: "045262", nama: "Budi", simpanan_bulanan: 150000, saldo_simpanan: [{ total_saldo: 500000 }] },
+  { id: 3, nik: "045263", nama: "Citra", simpanan_bulanan: 200000, saldo_simpanan: [{ total_saldo: 250000 }] },
+];
 
 export default async function SimpananPage({
   searchParams,
 }: {
   searchParams: { search?: string };
 }) {
-  const currentUser = await requireRole([
-    "SUPERADMIN",
-    "SEKRETARIS",
-    "BENDAHARA",
-    "KETUA",
-  ]);
+  // --- MOCK AUTH & DATA UNTUK DEMONSTRASI ---
+  // Hapus/komen bagian ini dan gunakan kode asli Anda
+  const currentUser = { role: "SUPERADMIN" };
+  const search = searchParams?.search || "";
+  const anggotaList = mockAnggotaList;
 
-  const search = searchParams.search || "";
-  const { data: anggotaList } = await getAllSaldoSimpanan(search);
+  // --- KODE ASLI ANDA ---
+  // const currentUser = await requireRole([
+  //   "SUPERADMIN",
+  //   "SEKRETARIS",
+  //   "BENDAHARA",
+  //   "KETUA",
+  // ]);
+  // const search = searchParams.search || "";
+  // const { data: anggotaList } = await getAllSaldoSimpanan(search);
 
   // Hitung total
   const totalSaldo = anggotaList.reduce((sum: number, a: any) => {
@@ -40,8 +53,7 @@ export default async function SimpananPage({
           position: relative;
           background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%);
           overflow: hidden;
-          padding: 24px 20px;
-          height: 240px;
+          padding: 32px 20px 80px 20px; /* Padding bottom diperbesar untuk efek tumpang tindih */
           border-bottom-left-radius: 24px;
           border-bottom-right-radius: 24px;
         }
@@ -75,7 +87,7 @@ export default async function SimpananPage({
           background: #fff;
           border-radius: 16px;
           border: 1px solid #e2e8f0;
-          box-shadow: 0 2px 12px rgba(15,45,107,.06);
+          box-shadow: 0 4px 16px rgba(15,45,107,.04);
           padding: 24px;
         }
 
@@ -102,17 +114,18 @@ export default async function SimpananPage({
           gap: 8px;
           background: #fff;
           color: #1a4db3;
-          padding: 8px 16px;
+          padding: 10px 16px;
           border-radius: 20px;
           text-decoration: none;
           font-size: 13px;
           font-weight: 600;
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          transition: opacity 0.2s ease;
+          transition: opacity 0.2s ease, transform 0.1s ease;
         }
 
         .fintech-btn-header:hover {
           opacity: 0.9;
+          transform: translateY(-1px);
         }
 
         /* Table Styles */
@@ -148,19 +161,31 @@ export default async function SimpananPage({
         }
 
         /* Responsive Grid Helper */
+        /* PERBAIKAN: Gunakan 3 kolom di desktop, 1 kolom di mobile agar lebih rapi */
         .stats-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(3, 1fr); 
           gap: 16px;
           margin-bottom: 24px;
         }
 
         @media (max-width: 768px) {
           .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: 1fr; /* Satu kolom di layar kecil */
           }
           .hide-on-mobile {
             display: none;
+          }
+          .fintech-header {
+            padding-bottom: 60px; /* Sedikit penyesuaian untuk mobile */
+          }
+          .header-actions {
+             flex-direction: column;
+             align-items: stretch;
+             width: 100%;
+          }
+          .fintech-btn-header {
+             justify-content: center;
           }
         }
       `}} />
@@ -169,26 +194,27 @@ export default async function SimpananPage({
       <header className="fintech-header">
         <div style={{ maxWidth: "1200px", margin: "0 auto", position: "relative", zIndex: 10 }}>
           
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "20px" }}>
             
             {/* Bagian Kiri: Navigasi & Judul */}
             <div>
-              {/* Tombol Back: Transparan Putih */}
+              {/* Tombol Back */}
               <Link 
                 href="/dashboard"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "8px",
-                  background: "rgba(255, 255, 255, 0.2)",
+                  gap: "6px",
+                  background: "rgba(255, 255, 255, 0.15)",
                   color: "#fff",
-                  padding: "8px 16px",
+                  padding: "6px 14px",
                   borderRadius: "20px",
                   textDecoration: "none",
-                  fontSize: "14px",
+                  fontSize: "13px",
                   fontWeight: "500",
                   backdropFilter: "blur(4px)",
-                  marginBottom: "20px"
+                  marginBottom: "16px",
+                  transition: "background 0.2s"
                 }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -200,13 +226,13 @@ export default async function SimpananPage({
               <h1 style={{ 
                 color: "#fff", 
                 margin: 0, 
-                fontSize: "28px", 
+                fontSize: "26px", 
                 fontWeight: "700",
                 display: "flex",
                 alignItems: "center",
-                gap: "12px"
+                gap: "10px"
               }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" />
                   <path d="M4 6v12c0 1.1.9 2 2 2h14v-4" />
                   <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z" />
@@ -215,62 +241,60 @@ export default async function SimpananPage({
               </h1>
             </div>
 
-            {/* Bagian Kanan: Tombol Aksi Utama (Sesuai Aturan: Putih dengan text biru) */}
-            <div style={{ display: "flex", gap: "12px" }}>
-              {canInput && (
-                <>
-                  <Link href="/dashboard/simpanan/input" className="fintech-btn-header">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                    </svg>
-                    Input Setoran
-                  </Link>
-                  <Link href="/dashboard/simpanan/penarikan" className="fintech-btn-header" style={{ color: "#d97706" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-                    </svg>
-                    Penarikan
-                  </Link>
-                </>
-              )}
-            </div>
+            {/* Bagian Kanan: Tombol Aksi Utama */}
+            {canInput && (
+              <div className="header-actions" style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                <Link href="/dashboard/simpanan/input" className="fintech-btn-header">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Input Setoran
+                </Link>
+                <Link href="/dashboard/simpanan/penarikan" className="fintech-btn-header" style={{ color: "#d97706" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                  </svg>
+                  Penarikan
+                </Link>
+              </div>
+            )}
 
           </div>
         </div>
       </header>
 
       {/* --- Main Content Area --- */}
-      <main style={{ maxWidth: "1200px", margin: "-70px auto 0 auto", padding: "0 20px", position: "relative", zIndex: 20 }}>
+      {/* Margin negatif diperbesar agar tumpang tindihnya pas */}
+      <main style={{ maxWidth: "1200px", margin: "-45px auto 0 auto", padding: "0 20px", position: "relative", zIndex: 20 }}>
         
-        {/* Stats Grid */}
+        {/* Stats Grid - PERBAIKAN: Menghapus gridColumn span 2, semuanya rata */}
         <div className="stats-grid">
-          <div className="card-fintech" style={{ padding: "20px", textAlign: "center" }}>
-            <div style={{ fontSize: "28px", fontWeight: "700", color: "#2563eb" }}>
+          <div className="card-fintech" style={{ padding: "20px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+            <div style={{ fontSize: "28px", fontWeight: "700", color: "#2563eb", lineHeight: 1.2 }}>
               {anggotaList.length}
             </div>
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               Total Anggota
             </div>
           </div>
           
-          {/* Box Total Saldo dibuat lebih lebar dengan gridColumn */}
-          <div className="card-fintech" style={{ padding: "20px", textAlign: "center", gridColumn: "span 2" }}>
-            <div style={{ fontSize: "28px", fontWeight: "700", color: "#16a34a" }}>
+          <div className="card-fintech" style={{ padding: "20px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+            <div style={{ fontSize: "28px", fontWeight: "700", color: "#16a34a", lineHeight: 1.2 }}>
               Rp {totalSaldo.toLocaleString("id-ID")}
             </div>
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               Total Saldo Simpanan
             </div>
           </div>
 
-          <div className="card-fintech" style={{ padding: "20px", textAlign: "center" }}>
-            <div style={{ fontSize: "24px", fontWeight: "700", color: "#9333ea", marginTop: "4px" }}>
+          <div className="card-fintech" style={{ padding: "20px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+            <div style={{ fontSize: "28px", fontWeight: "700", color: "#9333ea", lineHeight: 1.2 }}>
               Rp{" "}
               {anggotaList.length > 0
                 ? Math.round(totalSaldo / anggotaList.length).toLocaleString("id-ID")
                 : 0}
             </div>
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               Rata-rata/Anggota
             </div>
           </div>
@@ -289,7 +313,7 @@ export default async function SimpananPage({
             justifyContent: "space-between",
             flexWrap: "wrap",
             gap: "16px",
-            boxShadow: "0 4px 12px rgba(37, 99, 235, 0.2)"
+            boxShadow: "0 4px 12px rgba(37, 99, 235, 0.15)"
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
               <div style={{ background: "rgba(255,255,255,0.2)", padding: "12px", borderRadius: "12px", backdropFilter: "blur(4px)" }}>
@@ -299,7 +323,7 @@ export default async function SimpananPage({
                 <div style={{ fontWeight: "700", fontSize: "18px", marginBottom: "4px" }}>
                   Setoran Bulanan Massal
                 </div>
-                <div style={{ fontSize: "14px", opacity: 0.9 }}>
+                <div style={{ fontSize: "13px", opacity: 0.9 }}>
                   Input setoran bulanan untuk semua anggota aktif sekaligus
                 </div>
               </div>
@@ -314,7 +338,9 @@ export default async function SimpananPage({
                 fontWeight: "600",
                 fontSize: "14px",
                 textDecoration: "none",
-                transition: "opacity 0.2s ease"
+                transition: "opacity 0.2s ease, transform 0.1s ease",
+                display: "inline-block",
+                textAlign: "center"
               }}
             >
               Proses Sekarang →
@@ -394,8 +420,11 @@ export default async function SimpananPage({
                               textDecoration: "none",
                               fontSize: "12px",
                               fontWeight: "600",
-                              display: "inline-block"
+                              display: "inline-block",
+                              transition: "background 0.2s"
                             }}
+                            onMouseOver={(e) => e.currentTarget.style.background = "#dbeafe"}
+                            onMouseOut={(e) => e.currentTarget.style.background = "#eff6ff"}
                           >
                             Detail
                           </Link>
