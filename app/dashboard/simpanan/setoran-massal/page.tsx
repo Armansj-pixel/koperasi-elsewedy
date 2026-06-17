@@ -136,17 +136,11 @@ export default async function SetoranMassalPage() {
               </svg>
             </div>
             <p style={{ margin: 0, fontSize: "14px", color: "#1e40af", lineHeight: "1.6" }}>
-              <strong style={{ fontWeight: "600" }}>Info:</strong> Fitur ini akan input setoran wajib bulanan untuk{" "}
-              <strong style={{ fontWeight: "600" }}>semua anggota aktif</strong> sekaligus. Setiap
-              anggota akan diproses sesuai nominal{" "}
-              <strong style={{ fontWeight: "600" }}>Simpanan Bulanan</strong> masing-masing. Anggota
-              yang sudah di-input untuk bulan tersebut akan{" "}
-              <strong style={{ fontWeight: "600" }}>dilewati otomatis</strong>.
+              <strong style={{ fontWeight: "600" }}>Info Payroll:</strong> Fitur ini akan otomatis memotong <strong style={{ fontWeight: "600" }}>Simpanan Wajib</strong> dan <strong style={{ fontWeight: "600" }}>Simpanan Sukarela</strong> bulanan untuk semua anggota aktif sekaligus sesuai nominal di profil masing-masing. Anggota yang sudah diproses pada periode ini akan <strong style={{ fontWeight: "600" }}>dilewati otomatis</strong> untuk mencegah data ganda.
             </p>
           </div>
 
           {/* Form Component */}
-          {/* Anda dapat mengirimkan SetoranMassalForm.tsx selanjutnya jika perlu disesuaikan tampilannya */}
           <SetoranMassalForm
             defaultBulan={currentMonth}
             defaultTahun={currentYear}
