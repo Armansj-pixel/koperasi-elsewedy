@@ -52,6 +52,25 @@ const modules = [
   },
 ];
 
+// PENTING: Pindahkan CSS ke luar fungsi komponen agar Vercel SWC Compiler tidak error
+const DASHBOARD_STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  .kop-shell { font-family: 'Inter', sans-serif; }
+  .kop-header { background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%); padding: 48px 24px 80px; position: relative; overflow: hidden; }
+  .kop-header::before { content: ''; position: absolute; top: -60px; right: -40px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(255,255,255,.12) 0%, transparent 70%); border-radius: 50%; pointer-events: none; }
+  .kop-header::after { content: ''; position: absolute; bottom: 20px; left: -30px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(59,130,246,.25) 0%, transparent 70%); border-radius: 50%; pointer-events: none; }
+  .kop-logout-btn { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .2s; backdrop-filter: blur(8px); }
+  .kop-logout-btn:hover { background: rgba(255,255,255,.25); }
+  .kop-logout-btn:disabled { opacity: .6; cursor: not-allowed; }
+  .kop-card { background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(15,45,107,.07); }
+  .kop-menu-icon { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 22px; position: relative; transition: transform .2s, box-shadow .2s; }
+  .kop-menu-link:hover .kop-menu-icon { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,.12); }
+  .kop-ping-ring { position: absolute; inset: 0; border-radius: 50%; background: #3b82f6; opacity: .4; animation: kop-ping 1.4s ease-out infinite; }
+  @keyframes kop-ping { 0% { transform: scale(1); opacity: .4; } 70% { transform: scale(2.2); opacity: 0; } 100% { opacity: 0; } }
+  .kop-spin { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: kop-spin .7s linear infinite; }
+  @keyframes kop-spin { to { transform: rotate(360deg); } }
+`;
+
 export function DashboardClient({ user }: { user: CurrentUser }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [isMemberMode, setIsMemberMode] = useState(false);
@@ -81,24 +100,9 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
 
   return (
     <div className="kop-shell min-h-screen bg-slate-100 flex justify-center">
-      {/* ── GLOBAL STYLES (Menggunakan UI Original Anda) ── */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        .kop-shell { font-family: 'Inter', sans-serif; }
-        .kop-header { background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%); padding: 48px 24px 80px; position: relative; overflow: hidden; }
-        .kop-header::before { content: ''; position: absolute; top: -60px; right: -40px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(255,255,255,.12) 0%, transparent 70%); border-radius: 50%; pointer-events: none; }
-        .kop-header::after { content: ''; position: absolute; bottom: 20px; left: -30px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(59,130,246,.25) 0%, transparent 70%); border-radius: 50%; pointer-events: none; }
-        .kop-logout-btn { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .2s; backdrop-filter: blur(8px); }
-        .kop-logout-btn:hover { background: rgba(255,255,255,.25); }
-        .kop-logout-btn:disabled { opacity: .6; cursor: not-allowed; }
-        .kop-card { background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(15,45,107,.07); }
-        .kop-menu-icon { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 22px; position: relative; transition: transform .2s, box-shadow .2s; }
-        .kop-menu-link:hover .kop-menu-icon { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,.12); }
-        .kop-ping-ring { position: absolute; inset: 0; border-radius: 50%; background: #3b82f6; opacity: .4; animation: kop-ping 1.4s ease-out infinite; }
-        @keyframes kop-ping { 0% { transform: scale(1); opacity: .4; } 70% { transform: scale(2.2); opacity: 0; } 100% { opacity: 0; } }
-        .kop-spin { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: kop-spin .7s linear infinite; }
-        @keyframes kop-spin { to { transform: rotate(360deg); } }
-      `}} />
+      
+      {/* Panggil style secara aman di sini */}
+      <style dangerouslySetInnerHTML={{ __html: DASHBOARD_STYLES }} />
 
       <div className="w-full max-w-md bg-slate-100 min-h-screen relative sm:shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
         
@@ -202,7 +206,6 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
           </div>
 
           <div className="kop-card" style={{ padding: '20px 16px', marginBottom: 16 }}>
-            {/* GRID 4 KOLOM DIKEMBALIKAN */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px 4px' }}>
               {allowedModules.map((item, idx) => {
                 if (item.isActive) {
