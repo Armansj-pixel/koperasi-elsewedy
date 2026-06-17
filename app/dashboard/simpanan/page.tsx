@@ -1,6 +1,6 @@
 import React from "react";
 import { requireRole } from "@/lib/auth/session";
-import { getAllSaldoSimpanan, getSimpananByUserId } from "@/lib/simpanan/actions"; // Asumsi Anda punya fungsi getSimpananByUserId
+import { getAllSaldoSimpanan } from "@/lib/simpanan/actions";
 import Link from "next/link";
 
 export default async function SimpananPage({
@@ -8,7 +8,7 @@ export default async function SimpananPage({
 }: {
   searchParams: { search?: string };
 }) {
-  // 1. Izinkan ANGGOTA untuk masuk ke halaman ini juga
+  // 1. Tambahkan ANGGOTA agar bisa mengakses halaman ini
   const currentUser = await requireRole([
     "SUPERADMIN",
     "SEKRETARIS",
@@ -17,28 +17,27 @@ export default async function SimpananPage({
     "ANGGOTA",
   ]);
 
-  // 2. Definisikan permission berdasarkan role
+  const search = searchParams?.search || "";
+  
+  // 2. Ambil data menggunakan fungsi yang sudah Anda buat
+  const { data: allAnggotaList } = await getAllSaldoSimpanan(search);
+  const anggotaList = allAnggotaList || [];
+
+  // 3. Pisahkan logika tampilan berdasarkan role
   const isPengurus = ["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"].includes(currentUser.role);
   const canInput = ["SUPERADMIN", "BENDAHARA"].includes(currentUser.role);
 
-  // 3. Ambil data sesuai dengan role
-  const search = searchParams?.search || "";
-  let anggotaList = [];
   let totalSaldo = 0;
   let dataSimpananPribadi = null;
 
   if (isPengurus) {
-    // Jika pengurus, ambil semua data untuk tabel
-    const { data } = await getAllSaldoSimpanan(search);
-    anggotaList = data || [];
+    // Hitung total saldo semua anggota untuk Pengurus
     totalSaldo = anggotaList.reduce((sum: number, a: any) => {
       return sum + Number(a.saldo_simpanan?.[0]?.total_saldo || 0);
     }, 0);
   } else {
-    // Jika anggota biasa, ambil data simpanannya sendiri saja
-    // (Pastikan Anda menyesuaikan nama fungsi ini dengan yang ada di backend Anda)
-    const { data } = await getSimpananByUserId(currentUser.id);
-    dataSimpananPribadi = data;
+    // Cari data spesifik untuk Anggota yang sedang login
+    dataSimpananPribadi = anggotaList.find((a: any) => a.id === currentUser.id) || null;
   }
 
   return (
@@ -50,12 +49,9 @@ export default async function SimpananPage({
         * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
 
         .fintech-header {
-          position: relative;
-          background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%);
-          overflow: hidden;
-          padding: 32px 20px 80px 20px;
-          border-bottom-left-radius: 24px;
-          border-bottom-right-radius: 24px;
+          position: relative; background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%);
+          overflow: hidden; padding: 32px 20px 80px 20px;
+          border-bottom-left-radius: 24px; border-bottom-right-radius: 24px;
         }
 
         .fintech-header::before, .fintech-header::after {
@@ -137,7 +133,6 @@ export default async function SimpananPage({
                 </Link>
               )}
               
-              {/* Tombol Pengajuan Penarikan khusus untuk ANGGOTA */}
               {!isPengurus && (
                 <Link href="/dashboard/simpanan/pengajuan-penarikan" className="fintech-btn-header" style={{ color: "#d97706" }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
