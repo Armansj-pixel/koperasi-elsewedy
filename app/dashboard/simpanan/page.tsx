@@ -6,7 +6,7 @@ import Link from "next/link";
 export default async function SimpananPage({
   searchParams,
 }: {
-  searchParams: { search?: string; msg?: string; error?: string };
+  searchParams: { search?: string; msg?: string; error?: string; view?: string };
 }) {
   // 1. Izinkan akses untuk semua role terkait
   const currentUser = await requireRole([
@@ -18,16 +18,21 @@ export default async function SimpananPage({
   ]);
 
   const search = searchParams?.search || "";
+  const viewParam = searchParams?.view; // <-- Tangkap parameter view dari URL
   
-  // 2. Pisahkan logika tampilan berdasarkan role
-  const isPengurus = ["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"].includes(currentUser.role);
+  // 2. Pisahkan logika tampilan berdasarkan role & URL Parameter
+  const roleIsPengurus = ["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"].includes(currentUser.role);
+  
+  // Jika dia pengurus, TAPI URL-nya ada ?view=personal, maka isPengurus = FALSE (tampilkan view anggota)
+  const isPengurus = roleIsPengurus && viewParam !== "personal";
+  
   const canInput = ["SUPERADMIN", "BENDAHARA"].includes(currentUser.role);
 
   let anggotaList = [];
   let totalSaldo = 0;
   let dataSimpananPribadi = null;
 
-  // 3. Panggil fungsi database berdasarkan role
+  // 3. Panggil fungsi database berdasarkan mode yang aktif
   if (isPengurus) {
     const { data } = await getAllSaldoSimpanan(search);
     anggotaList = data || [];
@@ -35,6 +40,7 @@ export default async function SimpananPage({
       return sum + Number(a.saldo_simpanan?.[0]?.total_saldo || 0);
     }, 0);
   } else {
+    // Tarik data pribadi (Ini akan berjalan jika member biasa ATAU pengurus sedang di Mode Anggota)
     const { data } = await getSaldoByUserId(currentUser.id);
     dataSimpananPribadi = data;
   }
@@ -123,7 +129,7 @@ export default async function SimpananPage({
               </h1>
             </div>
 
-            {/* Bagian Kanan: Tombol Aksi - DIPERBARUI */}
+            {/* Bagian Kanan: Tombol Aksi */}
             <div className="header-actions" style={{ display: "flex", gap: "10px", marginTop: "8px", flexWrap: "wrap" }}>
               
               {/* TOMBOL KHUSUS PENGURUS */}
@@ -148,7 +154,7 @@ export default async function SimpananPage({
                 </>
               )}
               
-              {/* TOMBOL KHUSUS ANGGOTA */}
+              {/* TOMBOL KHUSUS ANGGOTA (TERMASUK PENGURUS DI MODE ANGGOTA) */}
               {!isPengurus && (
                 <Link href="/dashboard/simpanan/pengajuan-penarikan" className="fintech-btn-header" style={{ color: "#d97706" }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
@@ -262,7 +268,7 @@ export default async function SimpananPage({
           </>
         ) : (
           /* ========================================= */
-          /* VIEW UNTUK ANGGOTA BIASA (Dengan Keranjang Terpisah) */
+          /* VIEW UNTUK ANGGOTA BIASA & PENGURUS DI MODE ANGGOTA */
           /* ========================================= */
           <div className="card-fintech" style={{ padding: "32px", textAlign: "center", maxWidth: "500px", margin: "0 auto" }}>
             <div style={{ width: "64px", height: "64px", background: "#eff6ff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px auto", color: "#2563eb" }}>
@@ -289,6 +295,7 @@ export default async function SimpananPage({
               Simpanan Anda dikelola secara aman. Saldo sukarela dapat diajukan penarikannya sesuai dengan syarat dan ketentuan Koperasi.
             </p>
 
+            {/* Pastikan link pengajuan menyertakan param view agar rute baliknya aman */}
             <Link 
               href="/dashboard/simpanan/pengajuan-penarikan"
               style={{
