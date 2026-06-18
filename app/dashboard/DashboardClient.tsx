@@ -281,11 +281,11 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
                   if (item.isActive) {
                     
                     // PENGALIHAN URL JIKA SEDANG DI MODE ANGGOTA
-                    let targetHref = item.href;
-                    if (isPengurus && isMemberMode) {
-                      if (item.label === "Simpanan") targetHref = `/dashboard/simpanan/${user.id}`;
-                      if (item.label === "Pinjaman") targetHref = `/dashboard/pinjaman/${user.id}`;
-                    }
+let targetHref = item.href;
+if (isPengurus && isMemberMode) {
+  if (item.label === "Simpanan") targetHref = `/dashboard/simpanan?view=personal`;
+  if (item.label === "Pinjaman") targetHref = `/dashboard/pinjaman?view=personal`;
+}
 
                     return (
                       <Link key={idx} href={targetHref} className="kop-menu-link" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textDecoration: 'none' }}>
