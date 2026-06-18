@@ -398,3 +398,7 @@ export async function resetPasswordAnggota(id: string) {
   revalidatePath("/dashboard/anggota");
 
   return {
+    success: true,
+    message: `Password ${user.nama} berhasil direset. Password baru: ${newPassword}`,
+  };
+}
