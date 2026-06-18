@@ -49,6 +49,11 @@ export default async function DetailAnggotaPage({
   const isSuperAdmin = currentUser.role === "SUPERADMIN";
   const canEdit = ["SUPERADMIN", "SEKRETARIS"].includes(currentUser.role);
 
+  // LOGIKA POTONGAN BARU (Wajib + Sukarela)
+  const wajib = Number(anggota.simpanan_wajib_bulanan || anggota.simpanan_bulanan || 0);
+  const sukarela = Number(anggota.simpanan_sukarela_bulanan || 0);
+  const totalPotongan = wajib + sukarela;
+
   return (
     <div style={{ backgroundColor: "#f1f5f9", minHeight: "100vh", paddingBottom: "40px" }}>
       {/* --- Global & Design System Styles --- */}
@@ -70,7 +75,6 @@ export default async function DetailAnggotaPage({
           border-bottom-right-radius: 24px;
         }
 
-        /* Aturan wajib: pointer-events: none untuk elemen pseudo */
         .fintech-header::before,
         .fintech-header::after {
           content: '';
@@ -122,7 +126,6 @@ export default async function DetailAnggotaPage({
       <header className="fintech-header">
         <div style={{ maxWidth: "800px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative", zIndex: 10 }}>
           
-          {/* Tombol Back: Transparan Putih */}
           <Link 
             href="/dashboard/anggota" 
             style={{
@@ -145,7 +148,6 @@ export default async function DetailAnggotaPage({
             Kembali
           </Link>
 
-          {/* Tombol Aksi Utama: Putih teks Biru */}
           {canEdit && (
             <Link
               href={`/dashboard/anggota/${params.id}/edit`}
@@ -176,7 +178,6 @@ export default async function DetailAnggotaPage({
       {/* --- Main Content Area --- */}
       <main style={{ maxWidth: "800px", margin: "-100px auto 0 auto", padding: "0 20px", position: "relative", zIndex: 20 }}>
         
-        {/* Flash Messages */}
         {searchParams.msg && (
           <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", padding: "12px 16px", borderRadius: "8px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: "500" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -192,7 +193,6 @@ export default async function DetailAnggotaPage({
 
         {/* Profile Card */}
         <div className="card-fintech" style={{ padding: 0, overflow: "hidden" }}>
-          {/* User Identitas */}
           <div style={{ padding: "24px", display: "flex", alignItems: "center", gap: "20px", borderBottom: "1px solid #f1f5f9" }}>
             <div style={{ width: "72px", height: "72px", borderRadius: "50%", background: "#eff6ff", color: "#1e40af", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px", fontWeight: "700", border: "2px solid #dbeafe" }}>
               {anggota.nama?.charAt(0).toUpperCase()}
@@ -211,7 +211,6 @@ export default async function DetailAnggotaPage({
             </div>
           </div>
           
-          {/* Saldo Simpanan Banner */}
           <div style={{ padding: "20px 24px", background: "#fafafa", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <p style={{ margin: "0 0 6px 0", fontSize: "12px", color: "#64748b", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" }}>
@@ -280,7 +279,7 @@ export default async function DetailAnggotaPage({
           </div>
         </div>
 
-        {/* Data Koperasi */}
+        {/* Data Koperasi - DIPERBARUI */}
         <div className="card-fintech">
           <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: "700", color: "#0f2d6b", display: "flex", alignItems: "center", gap: "8px" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="22" x2="9" y2="2"/><line x1="15" y1="22" x2="15" y2="2"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
@@ -293,10 +292,18 @@ export default async function DetailAnggotaPage({
               badge
               badgeStyle={roleColors[anggota.role] || { backgroundColor: "#f1f5f9", color: "#334155" }}
             />
-            <DataRow
-              label="Simpanan Bulanan"
-              value={`Rp ${Number(anggota.simpanan_bulanan).toLocaleString("id-ID")}`}
-            />
+            {/* TAMPILAN RINCIAN POTONGAN */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid #f1f5f9" }}>
+              <span style={{ fontSize: "14px", color: "#64748b", flexShrink: 0, width: "160px" }}>Potongan / Bulan</span>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "#1e293b" }}>
+                  Rp {totalPotongan.toLocaleString("id-ID")}
+                </div>
+                <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px", fontWeight: "500" }}>
+                  Wajib: Rp {wajib.toLocaleString("id-ID")} | Sukarela: Rp {sukarela.toLocaleString("id-ID")}
+                </div>
+              </div>
+            </div>
             <DataRow
               label="Status Akun"
               value={anggota.is_active ? "Aktif" : "Nonaktif"}
