@@ -609,4 +609,119 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan berhasil diproses. Status pinjaman sekarang LUNAS.')}`)
 }
 
-// ─── ACTION: Input Pinjaman Existing (Migrasi)
+// ─── ACTION: Input Pinjaman Existing (Migrasi) ────────────────────────────────
+
+const PinjamanExistingSchema = z.object({
+  user_id: z.string().uuid('User ID tidak valid'),
+  nominal: z.number().min(1),
+  tenor_bulan: z.number().min(1).max(12),
+  cicilan_terbayar: z.number().min(0),
+  tanggal_pencairan: z.string().min(1, 'Tanggal pencairan wajib diisi'),
+  catatan: z.string().optional(),
+})
+
+export async function inputPinjamanExisting(formData: FormData) {
+  const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
+
+  const nominalRaw = (formData.get('nominal') as string) ?? ''
+  const nominal = parseInt(nominalRaw.replace(/\D/g, ''))
+  const tenor = parseInt(formData.get('tenor_bulan') as string)
+  const cicilan_terbayar = parseInt(formData.get('cicilan_terbayar') as string) || 0
+  const tanggal_pencairan = formData.get('tanggal_pencairan') as string
+
+  const parsed = PinjamanExistingSchema.safeParse({
+    user_id: formData.get('user_id') as string,
+    nominal,
+    tenor_bulan: tenor,
+    cicilan_terbayar,
+    tanggal_pencairan,
+    catatan: formData.get('catatan') as string,
+  })
+
+  if (!parsed.success) {
+    const msg = parsed.error.errors[0]?.message ?? 'Validasi gagal'
+    redirect(`/dashboard/pinjaman/existing?error=${encodeURIComponent(msg)}`)
+  }
+
+  const { biayaAdmin, totalDiterima, cicilanPerBulan } = await hitungPinjaman(nominal, tenor)
+  const tanggalCairan = new Date(tanggal_pencairan)
+
+  const supabase = await createClient()
+
+  const { data: pinjaman, error } = await supabase
+    .from('pinjaman')
+    .insert({
+      user_id: parsed.data.user_id,
+      nomor_kontrak: `MIG-${Date.now()}`,
+      nominal_pokok: nominal,
+      biaya_admin: biayaAdmin,
+      nominal_diterima: totalDiterima,
+      tenor_bulan: tenor,
+      cicilan_per_bulan: cicilanPerBulan,
+      sisa_pokok: Math.max(0, nominal - (cicilan_terbayar * cicilanPerBulan)),
+      sisa_cicilan: Math.max(0, tenor - cicilan_terbayar),
+      cicilan_mulai_periode: tanggal_pencairan.slice(0, 7),
+      tujuan: (parsed.data.catatan || 'Migrasi Pinjaman Excel').trim(),
+      status: cicilan_terbayar >= tenor ? 'LUNAS' : 'ACTIVE',
+      tanggal_pengajuan: new Date(tanggal_pencairan).toISOString(),
+      tanggal_cair: tanggal_pencairan, 
+      tanggal_lunas: cicilan_terbayar >= tenor ? tanggal_pencairan : null,
+      disbursed_by: session.id,
+      disbursed_at: new Date().toISOString(),
+      catatan_pengaju: `[MIGRASI] ${parsed.data.catatan ?? ''}`.trim(),
+    })
+    .select()
+    .single()
+
+  if (error || !pinjaman) {
+    redirect(`/dashboard/pinjaman/existing?error=${encodeURIComponent('Gagal input pinjaman: ' + (error?.message ?? ''))}`)
+  }
+
+  const jadwal = generateJadwalCicilan(
+    pinjaman.id,
+    nominal,
+    tenor,
+    cicilanPerBulan,
+    tanggalCairan
+  )
+
+  const jadwalWithStatus = jadwal.map((c, i) => ({
+    ...c,
+    status: i < cicilan_terbayar ? ('PAID' as CicilanStatus) : ('SCHEDULED' as CicilanStatus),
+    tanggal_pembayaran: i < cicilan_terbayar ? tanggal_pencairan : null,
+    created_at: new Date().toISOString()
+  }))
+
+  await supabase.from('cicilan_pinjaman').insert(jadwalWithStatus)
+
+  revalidatePath('/dashboard/pinjaman')
+  redirect(`/dashboard/pinjaman/${pinjaman.id}?success=${encodeURIComponent('Data pinjaman existing berhasil diinput')}`)
+}
+
+// ─── GET: Statistik Pinjaman ──────────────────────────────────────────────────
+
+export async function getStatistikPinjaman() {
+  const supabase = await createClient()
+
+  const { data: pinjaman } = await supabase
+    .from('pinjaman')
+    .select('nominal_pokok, status, cicilan_per_bulan')
+
+  if (!pinjaman) return { total: 0, aktif: 0, pending: 0, lunas: 0, totalOutstanding: 0 }
+
+  const aktif = pinjaman.filter((p) => p.status === 'ACTIVE')
+  const pending = pinjaman.filter((p) =>
+    ['PENDING_L1', 'PENDING_L2', 'PENDING_L3', 'APPROVED'].includes(p.status)
+  )
+  const lunas = pinjaman.filter((p) => p.status === 'LUNAS')
+
+  return {
+    total: pinjaman.length,
+    aktif: aktif.length,
+    pending: pending.length,
+    lunas: lunas.length,
+    totalOutstanding: aktif.reduce((sum, p) => sum + (p.nominal_pokok ?? 0), 0),
+    totalCicilanBulanan: aktif.reduce((sum, p) => sum + (p.cicilan_per_bulan ?? 0), 0),
+  }
+}
+
