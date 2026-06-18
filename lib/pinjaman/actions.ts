@@ -597,13 +597,15 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
 const PinjamanExistingSchema = z.object({
   user_id: z.string().uuid('User ID tidak valid'),
   nominal: z.number().min(1),
-  tenor_bulan: z.number().min(1).max(36),
+  // Mengikuti aturan limit 12 bulan
+  tenor_bulan: z.number().min(1).max(12),
   cicilan_terbayar: z.number().min(0),
   tanggal_pencairan: z.string().min(1, 'Tanggal pencairan wajib diisi'),
   catatan: z.string().optional(),
 })
 
 export async function inputPinjamanExisting(formData: FormData) {
+  // Masih diizinkan untuk SUPERADMIN agar Mas bisa bantu migrasi awal
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
 
   const nominalRaw = (formData.get('nominal') as string) ?? ''
@@ -626,4 +628,81 @@ export async function inputPinjamanExisting(formData: FormData) {
     redirect(`/dashboard/pinjaman/existing?error=${encodeURIComponent(msg)}`)
   }
 
-  const { biayaAdmin, totalDiterima, cicilanPerBulan
+  const { biayaAdmin, totalDiterima, cicilanPerBulan } = await hitungPinjaman(nominal, tenor)
+  const tanggalCairan = new Date(tanggal_pencairan)
+  const tanggalJatuhTempo = new Date(tanggalCairan)
+  tanggalJatuhTempo.setMonth(tanggalJatuhTempo.getMonth() + tenor)
+
+  const supabase = await createClient()
+
+  const { data: pinjaman, error } = await supabase
+    .from('pinjaman')
+    .insert({
+      user_id: parsed.data.user_id,
+      nominal,
+      biaya_admin: biayaAdmin,
+      total_diterima: totalDiterima,
+      tenor_bulan: tenor,
+      cicilan_per_bulan: cicilanPerBulan,
+      status: cicilan_terbayar >= tenor ? 'LUNAS' : 'ACTIVE',
+      tanggal_pengajuan: tanggal_pencairan,
+      tanggal_disetujui: tanggal_pencairan,
+      tanggal_pencairan: tanggal_pencairan,
+      tanggal_jatuh_tempo: tanggalJatuhTempo.toISOString().split('T')[0],
+      disbursed_by: session.id,
+      disbursed_at: new Date().toISOString(),
+      catatan_pengaju: `[MIGRASI] ${parsed.data.catatan ?? ''}`.trim(),
+    })
+    .select()
+    .single()
+
+  if (error || !pinjaman) {
+    redirect(`/dashboard/pinjaman/existing?error=${encodeURIComponent('Gagal input pinjaman: ' + (error?.message ?? ''))}`)
+  }
+
+  const jadwal = generateJadwalCicilan(
+    pinjaman.id,
+    nominal,
+    tenor,
+    cicilanPerBulan,
+    tanggalCairan
+  )
+
+  const jadwalWithStatus = jadwal.map((c, i) => ({
+    ...c,
+    status: i < cicilan_terbayar ? ('PAID' as CicilanStatus) : ('SCHEDULED' as CicilanStatus),
+    tanggal_pembayaran: i < cicilan_terbayar ? tanggal_pencairan : null,
+  }))
+
+  await supabase.from('cicilan_pinjaman').insert(jadwalWithStatus)
+
+  revalidatePath('/dashboard/pinjaman')
+  redirect(`/dashboard/pinjaman/${pinjaman.id}?success=${encodeURIComponent('Data pinjaman existing berhasil diinput')}`)
+}
+
+// ─── GET: Statistik Pinjaman ──────────────────────────────────────────────────
+
+export async function getStatistikPinjaman() {
+  const supabase = await createClient()
+
+  const { data: pinjaman } = await supabase
+    .from('pinjaman')
+    .select('nominal, status, cicilan_per_bulan')
+
+  if (!pinjaman) return { total: 0, aktif: 0, pending: 0, lunas: 0, totalOutstanding: 0 }
+
+  const aktif = pinjaman.filter((p) => p.status === 'ACTIVE')
+  const pending = pinjaman.filter((p) =>
+    ['PENDING_L1', 'PENDING_L2', 'PENDING_L3', 'APPROVED'].includes(p.status)
+  )
+  const lunas = pinjaman.filter((p) => p.status === 'LUNAS')
+
+  return {
+    total: pinjaman.length,
+    aktif: aktif.length,
+    pending: pending.length,
+    lunas: lunas.length,
+    totalOutstanding: aktif.reduce((sum, p) => sum + (p.nominal ?? 0), 0),
+    totalCicilanBulanan: aktif.reduce((sum, p) => sum + (p.cicilan_per_bulan ?? 0), 0),
+  }
+}
