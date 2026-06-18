@@ -26,7 +26,7 @@ const AnggotaSchema = z.object({
 });
 
 // =====================================================================
-// GET ALL ANGGOTA (YANG SUDAH DIPERBARUI DENGAN PINJAMAN)
+// GET ALL ANGGOTA (DIPERBAIKI UNTUK TYPESCRIPT)
 // =====================================================================
 
 export async function getAnggotaList(search?: string) {
@@ -57,11 +57,13 @@ export async function getAnggotaList(search?: string) {
     .from("saldo_simpanan")
     .select("user_id, total_saldo, saldo_pokok, saldo_wajib, saldo_sukarela");
 
-  // AMBIL DATA TOTAL PINJAMAN
-  const { data: pinjamanList } = await supabase
+  // AMBIL DATA TOTAL PINJAMAN (PENULISAN STANDAR SUPABASE AGAR TS TIDAK ERROR)
+  const { data: pinjamanData, error: pinjamanError } = await supabase
     .from("saldo_pinjaman") 
-    .select("user_id, sisa_pokok, sisa_margin")
-    .catch(() => ({ data: [] })); 
+    .select("user_id, sisa_pokok, sisa_margin");
+
+  // Jika tabel belum ada, anggap saja kosong
+  const pinjamanList = pinjamanError ? [] : (pinjamanData || []);
 
   // GABUNGKAN DATA
   const data = (users || []).map((user: any) => {
@@ -396,7 +398,3 @@ export async function resetPasswordAnggota(id: string) {
   revalidatePath("/dashboard/anggota");
 
   return {
-    success: true,
-    message: `Password ${user.nama} berhasil direset. Password baru: ${newPassword}`,
-  };
-}
