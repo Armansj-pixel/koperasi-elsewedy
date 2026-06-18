@@ -32,6 +32,9 @@ export default async function AnggotaPage({
   const totalAktif    = anggotaList.filter((a: any) =>  a.is_active).length;
   const totalNonaktif = anggotaList.filter((a: any) => !a.is_active).length;
   const totalSaldo    = anggotaList.reduce((sum: number, a: any) => sum + Number(a.total_saldo || 0), 0);
+  
+  // Hitung juga total pinjaman seluruh anggota (jika ada)
+  const totalPinjaman = anggotaList.reduce((sum: number, a: any) => sum + Number(a.sisa_pinjaman || 0), 0);
 
   return (
     <>
@@ -203,14 +206,17 @@ export default async function AnggotaPage({
               <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#94a3b8", marginTop: 4 }}>Aktif</div>
             </div>
             <div className="ap-stat-card">
-              <div style={{ fontSize: 28, fontWeight: 800, color: "#dc2626", letterSpacing: "-.02em" }}>{totalNonaktif}</div>
-              <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#94a3b8", marginTop: 4 }}>Nonaktif</div>
-            </div>
-            <div className="ap-stat-card">
               <div style={{ fontSize: 22, fontWeight: 800, color: "#7c3aed", letterSpacing: "-.02em" }}>
                 Rp {(totalSaldo / 1000000).toFixed(1)}jt
               </div>
-              <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#94a3b8", marginTop: 4 }}>Total Saldo</div>
+              <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#94a3b8", marginTop: 4 }}>Total Simpanan</div>
+            </div>
+            {/* Mengganti stat Nonaktif menjadi stat Total Pinjaman agar lebih relevan dengan keuangan */}
+            <div className="ap-stat-card">
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#dc2626", letterSpacing: "-.02em" }}>
+                Rp {(totalPinjaman / 1000000).toFixed(1)}jt
+              </div>
+              <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#94a3b8", marginTop: 4 }}>Total Pinjaman</div>
             </div>
           </div>
 
@@ -241,8 +247,8 @@ export default async function AnggotaPage({
                     <th>NIK</th>
                     <th>Nama</th>
                     <th className="ap-hide-mobile">Role</th>
-                    <th className="right ap-hide-mobile">Potongan/Bln</th>
-                    <th className="right ap-hide-mobile">Total Saldo</th>
+                    <th className="right ap-hide-mobile">Simpanan</th>
+                    <th className="right ap-hide-mobile">Pinjaman</th>
                     <th>Status</th>
                     <th className="center">Aksi</th>
                   </tr>
@@ -258,11 +264,6 @@ export default async function AnggotaPage({
                   ) : (
                     anggotaList.map((anggota: any) => {
                       const rc = roleColors[anggota.role] || { bg: "#f1f5f9", color: "#475569" };
-                      
-                      // LOGIKA UNTUK MENAMPILKAN WAJIB + SUKARELA
-                      const wajib = Number(anggota.simpanan_wajib_bulanan || 0);
-                      const sukarela = Number(anggota.simpanan_sukarela_bulanan || 0);
-                      const totalPotongan = wajib + sukarela;
 
                       return (
                         <tr key={anggota.id}>
@@ -282,17 +283,11 @@ export default async function AnggotaPage({
                               {roleLabels[anggota.role]}
                             </span>
                           </td>
-                          <td className="right ap-hide-mobile">
-                            {/* TAMPILAN RINCIAN POTONGAN */}
-                            <div style={{ fontWeight: 700, color: "#0f172a" }}>
-                              Rp {totalPotongan.toLocaleString("id-ID")}
-                            </div>
-                            <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>
-                              W: {wajib / 1000}k | S: {sukarela / 1000}k
-                            </div>
-                          </td>
                           <td className="right ap-hide-mobile" style={{ fontWeight: 700, color: "#059669" }}>
                             Rp {Number(anggota.total_saldo || 0).toLocaleString("id-ID")}
+                          </td>
+                          <td className="right ap-hide-mobile" style={{ fontWeight: 700, color: "#dc2626" }}>
+                            Rp {Number(anggota.sisa_pinjaman || 0).toLocaleString("id-ID")}
                           </td>
                           <td>
                             <span className="ap-badge" style={{
