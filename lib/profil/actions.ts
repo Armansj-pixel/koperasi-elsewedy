@@ -24,8 +24,6 @@ export interface ProfilUser {
   last_login_at: string | null
 }
 
-const ALLOWED_ROLES = ['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'] as const
-
 // Batas ukuran foto sebelum encoding base64 (2MB) — dicek di server sebagai jaga-jaga
 // kalau validasi client-side ter-bypass.
 const MAX_FOTO_BASE64_LENGTH = Math.ceil((2 * 1024 * 1024 * 4) / 3) + 100 // ~2MB raw -> base64
@@ -33,7 +31,7 @@ const MAX_FOTO_BASE64_LENGTH = Math.ceil((2 * 1024 * 1024 * 4) / 3) + 100 // ~2M
 // ─── GET: Profil Saya ─────────────────────────────────────────────────────────
 
 export async function getProfilSaya() {
-  const session = await requireRole(ALLOWED_ROLES)
+  const session = await requireRole(['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'])
 
   const supabase = await createClient()
 
@@ -71,7 +69,7 @@ const UpdateProfilSchema = z.object({
 })
 
 export async function updateProfilSaya(formData: FormData) {
-  const session = await requireRole(ALLOWED_ROLES)
+  const session = await requireRole(['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'])
 
   const nama = (formData.get('nama') as string) ?? ''
   const email = (formData.get('email') as string) ?? ''
