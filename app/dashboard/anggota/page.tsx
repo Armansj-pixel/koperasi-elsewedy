@@ -241,7 +241,7 @@ export default async function AnggotaPage({
                     <th>NIK</th>
                     <th>Nama</th>
                     <th className="ap-hide-mobile">Role</th>
-                    <th className="right ap-hide-mobile">Setoran/Bln</th>
+                    <th className="right ap-hide-mobile">Potongan/Bln</th>
                     <th className="right ap-hide-mobile">Total Saldo</th>
                     <th>Status</th>
                     <th className="center">Aksi</th>
@@ -258,6 +258,12 @@ export default async function AnggotaPage({
                   ) : (
                     anggotaList.map((anggota: any) => {
                       const rc = roleColors[anggota.role] || { bg: "#f1f5f9", color: "#475569" };
+                      
+                      // LOGIKA UNTUK MENAMPILKAN WAJIB + SUKARELA
+                      const wajib = Number(anggota.simpanan_wajib_bulanan || 0);
+                      const sukarela = Number(anggota.simpanan_sukarela_bulanan || 0);
+                      const totalPotongan = wajib + sukarela;
+
                       return (
                         <tr key={anggota.id}>
                           <td>
@@ -276,8 +282,14 @@ export default async function AnggotaPage({
                               {roleLabels[anggota.role]}
                             </span>
                           </td>
-                          <td className="right ap-hide-mobile" style={{ fontWeight: 600, color: "#475569" }}>
-                            Rp {Number(anggota.simpanan_bulanan).toLocaleString("id-ID")}
+                          <td className="right ap-hide-mobile">
+                            {/* TAMPILAN RINCIAN POTONGAN */}
+                            <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                              Rp {totalPotongan.toLocaleString("id-ID")}
+                            </div>
+                            <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>
+                              W: {wajib / 1000}k | S: {sukarela / 1000}k
+                            </div>
                           </td>
                           <td className="right ap-hide-mobile" style={{ fontWeight: 700, color: "#059669" }}>
                             Rp {Number(anggota.total_saldo || 0).toLocaleString("id-ID")}
