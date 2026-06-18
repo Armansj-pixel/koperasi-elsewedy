@@ -33,9 +33,8 @@ export async function getProfilSaya() {
   const session = await requireRole(['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'])
   const supabase = await createClient()
 
-  // PERBAIKAN: Gunakan db_user_id jika ada, fallback ke id biasa
-  // Ini mencegah error jika ID Auth dan ID tabel users berbeda
-  const targetId = session.db_user_id || session.id
+  // PERBAIKAN TS: Gunakan (session as any) untuk bypass strict typing TypeScript
+  const targetId = (session as any).db_user_id || session.id
 
   const { data, error } = await supabase
     .from('users')
@@ -43,7 +42,7 @@ export async function getProfilSaya() {
       'id, nik, nama, email, no_hp, no_rekening, nama_bank, foto_profil, role, simpanan_wajib_bulanan, simpanan_sukarela_bulanan, tanggal_bergabung, is_active, last_login_at'
     )
     .eq('id', targetId)
-    .maybeSingle() // <--- PERBAIKAN: Ganti .single() jadi .maybeSingle() agar tidak crash
+    .maybeSingle()
 
   if (error || !data) {
     return { data: null, error: error?.message ?? 'Profil tidak ditemukan di database.' }
@@ -73,8 +72,8 @@ const UpdateProfilSchema = z.object({
 export async function updateProfilSaya(formData: FormData) {
   const session = await requireRole(['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'])
   
-  // PERBAIKAN: Sinkronkan dengan ID yang dipakai di getProfilSaya
-  const targetId = session.db_user_id || session.id
+  // PERBAIKAN TS: Gunakan (session as any) untuk bypass strict typing TypeScript
+  const targetId = (session as any).db_user_id || session.id
 
   const nama = (formData.get('nama') as string) ?? ''
   const email = (formData.get('email') as string) ?? ''
