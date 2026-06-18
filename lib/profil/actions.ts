@@ -24,7 +24,7 @@ export interface ProfilUser {
   last_login_at: string | null
 }
 
-const ALLOWED_ROLES = ['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN']
+const ALLOWED_ROLES = ['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'] as const
 
 // Batas ukuran foto sebelum encoding base64 (2MB) — dicek di server sebagai jaga-jaga
 // kalau validasi client-side ter-bypass.
