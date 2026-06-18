@@ -14,6 +14,10 @@ export default async function PengajuanPenarikanPage({
     "ANGGOTA", "SEKRETARIS", "BENDAHARA", "KETUA", "SUPERADMIN"
   ]);
 
+  // Cek apakah user adalah pengurus untuk mengatur rute kembali
+  const isPengurus = ["SUPERADMIN", "BENDAHARA", "SEKRETARIS", "KETUA"].includes(currentUser.role);
+  const returnPath = isPengurus ? "/dashboard/simpanan?view=personal" : "/dashboard/simpanan";
+
   // =====================================================================
   // LOGIKA CUT-OFF JAMINAN (Kamis 09:00 - 15:00 WIB)
   // =====================================================================
@@ -43,7 +47,12 @@ export default async function PengajuanPenarikanPage({
     "use server";
     const res = await ajukanPenarikan(formData);
     if (res.success) {
-      redirect(`/dashboard/simpanan?msg=${encodeURIComponent(res.message || "Pengajuan berhasil")}`);
+      // Jika pengurus, kembalikan ke view personal agar tidak dilempar ke tabel admin
+      const redirectUrl = isPengurus 
+        ? `/dashboard/simpanan?view=personal&msg=${encodeURIComponent(res.message || "Pengajuan berhasil")}`
+        : `/dashboard/simpanan?msg=${encodeURIComponent(res.message || "Pengajuan berhasil")}`;
+      
+      redirect(redirectUrl);
     } else {
       redirect(`/dashboard/simpanan/pengajuan-penarikan?error=${encodeURIComponent(res.error || "Gagal")}`);
     }
@@ -76,7 +85,8 @@ export default async function PengajuanPenarikanPage({
 
       <header className="fintech-header">
         <div style={{ maxWidth: "500px", margin: "0 auto", position: "relative", zIndex: 10 }}>
-          <Link href="/dashboard/simpanan" style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(255, 255, 255, 0.15)", color: "#fff", padding: "6px 14px", borderRadius: "20px", textDecoration: "none", fontSize: "13px", fontWeight: "500" }}>
+          {/* Tombol kembali diarahkan sesuai role */}
+          <Link href={returnPath} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(255, 255, 255, 0.15)", color: "#fff", padding: "6px 14px", borderRadius: "20px", textDecoration: "none", fontSize: "13px", fontWeight: "500" }}>
             Kembali
           </Link>
           <h1 style={{ color: "#fff", margin: "16px 0 0 0", fontSize: "24px", fontWeight: "700" }}>
@@ -101,7 +111,7 @@ export default async function PengajuanPenarikanPage({
               <div style={{ background: "#fef3c7", color: "#b45309", padding: "12px", borderRadius: "8px", fontSize: "12px", fontWeight: "600" }}>
                 Silakan ajukan kembali setelah jam 15:00 WIB.
               </div>
-              <Link href="/dashboard/simpanan" style={{ display: "block", marginTop: "24px", padding: "12px", background: "#f1f5f9", color: "#475569", borderRadius: "8px", textDecoration: "none", fontSize: "14px", fontWeight: "600" }}>
+              <Link href={returnPath} style={{ display: "block", marginTop: "24px", padding: "12px", background: "#f1f5f9", color: "#475569", borderRadius: "8px", textDecoration: "none", fontSize: "14px", fontWeight: "600" }}>
                 Kembali ke Dashboard Simpanan
               </Link>
             </div>
@@ -146,7 +156,6 @@ export default async function PengajuanPenarikanPage({
                 ></textarea>
               </div>
 
-              {/* Jika saldo sukarela kurang dari batas minimal penarikan (misal Rp 10.000), disable tombolnya */}
               <button 
                 type="submit" 
                 className="btn-submit"
