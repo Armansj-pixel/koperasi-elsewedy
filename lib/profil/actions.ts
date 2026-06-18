@@ -1,6 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+// PERBAIKAN: Gunakan createServiceClient agar tidak diblokir RLS Supabase
+import { createServiceClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth/session'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -31,17 +32,16 @@ const MAX_FOTO_BASE64_LENGTH = Math.ceil((2 * 1024 * 1024 * 4) / 3) + 100
 
 export async function getProfilSaya() {
   const session = await requireRole(['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'])
-  const supabase = await createClient()
-
-  // PERBAIKAN TS: Gunakan (session as any) untuk bypass strict typing TypeScript
-  const targetId = (session as any).db_user_id || session.id
+  
+  // Gunakan Service Client karena kita mencari berdasarkan ID database, bukan ID Auth
+  const supabase = createServiceClient()
 
   const { data, error } = await supabase
     .from('users')
     .select(
       'id, nik, nama, email, no_hp, no_rekening, nama_bank, foto_profil, role, simpanan_wajib_bulanan, simpanan_sukarela_bulanan, tanggal_bergabung, is_active, last_login_at'
     )
-    .eq('id', targetId)
+    .eq('id', session.id) // Type safe! Tidak perlu hack (session as any) lagi
     .maybeSingle()
 
   if (error || !data) {
@@ -71,9 +71,6 @@ const UpdateProfilSchema = z.object({
 
 export async function updateProfilSaya(formData: FormData) {
   const session = await requireRole(['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'])
-  
-  // PERBAIKAN TS: Gunakan (session as any) untuk bypass strict typing TypeScript
-  const targetId = (session as any).db_user_id || session.id
 
   const nama = (formData.get('nama') as string) ?? ''
   const email = (formData.get('email') as string) ?? ''
@@ -91,7 +88,7 @@ export async function updateProfilSaya(formData: FormData) {
     redirect(`/dashboard/profil/edit?error=${encodeURIComponent('Ukuran foto terlalu besar, maksimal 2MB')}`)
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const updateData: Record<string, unknown> = {
     nama: parsed.data.nama.trim(),
@@ -106,7 +103,7 @@ export async function updateProfilSaya(formData: FormData) {
     updateData.foto_profil = null
   }
 
-  const { error } = await supabase.from('users').update(updateData).eq('id', targetId)
+  const { error } = await supabase.from('users').update(updateData).eq('id', session.id)
 
   if (error) {
     redirect(`/dashboard/profil/edit?error=${encodeURIComponent('Gagal menyimpan profil: ' + error.message)}`)
