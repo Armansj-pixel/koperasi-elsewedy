@@ -18,7 +18,9 @@ export interface ProfilUser {
   nama_bank: string | null
   foto_profil: string | null
   role: string
-  simpanan_bulanan: number
+  // KOLOM DIPERBARUI SESUAI DATABASE BARU
+  simpanan_wajib_bulanan: number
+  simpanan_sukarela_bulanan: number
   tanggal_bergabung: string
   is_active: boolean
   last_login_at: string | null
@@ -35,10 +37,11 @@ export async function getProfilSaya() {
 
   const supabase = await createClient()
 
+  // QUERY DIPERBARUI: Mengganti simpanan_bulanan menjadi wajib & sukarela
   const { data, error } = await supabase
     .from('users')
     .select(
-      'id, nik, nama, email, no_hp, no_rekening, nama_bank, foto_profil, role, simpanan_bulanan, tanggal_bergabung, is_active, last_login_at'
+      'id, nik, nama, email, no_hp, no_rekening, nama_bank, foto_profil, role, simpanan_wajib_bulanan, simpanan_sukarela_bulanan, tanggal_bergabung, is_active, last_login_at'
     )
     .eq('id', session.id)
     .single()
