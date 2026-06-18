@@ -48,6 +48,10 @@ export default async function ProfilPage({
 
   const roleInfo = ROLE_LABEL[profil.role] ?? { label: profil.role, bg: "#f1f5f9", color: "#64748b" };
 
+  // Fallback ke 0 jika data tidak ada, agar aman dari undefined
+  const wajib = profil.simpanan_wajib_bulanan || 0;
+  const sukarela = profil.simpanan_sukarela_bulanan || 0;
+
   return (
     <div style={{ backgroundColor: "#f1f5f9", minHeight: "100vh", paddingBottom: "40px" }}>
       <style
@@ -216,17 +220,25 @@ export default async function ProfilPage({
                 <span style={{ fontSize: "13px", color: "#94a3b8" }}>Tanggal Bergabung</span>
                 <span style={{ fontSize: "14px", color: "#1e293b" }}>{formatTanggal(profil.tanggal_bergabung)}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "13px", color: "#94a3b8" }}>Simpanan Bulanan Wajib</span>
-                <span style={{ fontSize: "14px", fontWeight: "600", color: "#16a34a" }}>{formatRupiah(profil.simpanan_bulanan)}</span>
+              
+              {/* BAGIAN POTONGAN DIPERBARUI */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "13px", color: "#94a3b8" }}>Simpanan Wajib / Bln</span>
+                <span style={{ fontSize: "14px", fontWeight: "600", color: "#16a34a" }}>{formatRupiah(wajib)}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "13px", color: "#94a3b8" }}>Simpanan Sukarela / Bln</span>
+                <span style={{ fontSize: "14px", fontWeight: "600", color: "#16a34a" }}>{formatRupiah(sukarela)}</span>
+              </div>
+              {/* END BAGIAN POTONGAN DIPERBARUI */}
+
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
                 <span style={{ fontSize: "13px", color: "#94a3b8" }}>No. Rekening</span>
                 <span style={{ fontSize: "14px", color: "#1e293b" }}>{profil.no_rekening || "-"} {profil.nama_bank ? `(${profil.nama_bank})` : ""}</span>
               </div>
             </div>
             <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid #f1f5f9", fontSize: "12px", color: "#94a3b8" }}>
-              NIK dan rekening hanya dapat diubah oleh pengurus koperasi.
+              NIK, rekening, dan potongan simpanan hanya dapat diubah oleh pengurus koperasi.
             </div>
           </div>
 
