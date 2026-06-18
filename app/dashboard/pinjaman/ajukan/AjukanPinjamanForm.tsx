@@ -4,7 +4,8 @@ import React, { useState, useTransition } from "react";
 import Link from "next/link";
 import { ajukanPinjaman } from "@/lib/pinjaman/actions";
 
-const TENOR_OPTIONS = [3, 6, 9, 12, 18, 24, 36];
+// 1. KUNCI TENOR: Hanya sampai 12 bulan
+const TENOR_OPTIONS = [3, 6, 9, 12];
 
 function formatRupiah(n: number) {
   return "Rp " + Number(n).toLocaleString("id-ID");
@@ -21,7 +22,9 @@ export default function AjukanPinjamanForm() {
 
   function handleNominalChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value.replace(/\D/g, "");
-    setNominal(parseInt(raw) || 0);
+    const val = parseInt(raw) || 0;
+    // 2. KUNCI INPUT: Otomatis tertahan di angka 15.000.000 kalau ngetik lebih
+    setNominal(Math.min(val, 15000000));
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -51,15 +54,15 @@ export default function AjukanPinjamanForm() {
             style={{ paddingLeft: "44px" }}
             required
           />
-          {/* Satu-satunya input bernama "nominal" yang dibaca FormData (integer murni) */}
           <input type="hidden" name="nominal" value={nominal} />
         </div>
         <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "6px" }}>
-          Min Rp 100.000 — Maks Rp 50.000.000
+          Min Rp 100.000 — Maks Rp 15.000.000
         </p>
 
+        {/* 3. KUNCI QUICK SELECT: Tombol maksimal hanya 15 Juta */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
-          {[1000000, 2000000, 5000000, 10000000, 20000000].map((v) => (
+          {[1000000, 2000000, 5000000, 10000000, 15000000].map((v) => (
             <button
               key={v}
               type="button"
@@ -199,18 +202,18 @@ export default function AjukanPinjamanForm() {
         </Link>
         <button
           type="submit"
-          disabled={isPending || nominal < 100000}
+          disabled={isPending || nominal < 100000 || nominal > 15000000}
           style={{
             flex: 1,
             padding: "14px 0",
-            background: isPending || nominal < 100000 ? "#94a3b8" : "#2563eb",
+            background: isPending || nominal < 100000 || nominal > 15000000 ? "#94a3b8" : "#2563eb",
             color: "#fff",
             border: "none",
             borderRadius: "12px",
             fontSize: "14px",
             fontWeight: "600",
-            cursor: isPending || nominal < 100000 ? "not-allowed" : "pointer",
-            boxShadow: isPending || nominal < 100000 ? "none" : "0 4px 12px rgba(37,99,235,0.25)",
+            cursor: isPending || nominal < 100000 || nominal > 15000000 ? "not-allowed" : "pointer",
+            boxShadow: isPending || nominal < 100000 || nominal > 15000000 ? "none" : "0 4px 12px rgba(37,99,235,0.25)",
           }}
         >
           {isPending ? "Mengirim..." : "Ajukan Pinjaman"}
