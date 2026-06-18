@@ -18,7 +18,6 @@ export interface ProfilUser {
   nama_bank: string | null
   foto_profil: string | null
   role: string
-  // KOLOM DIPERBARUI SESUAI DATABASE BARU
   simpanan_wajib_bulanan: number
   simpanan_sukarela_bulanan: number
   tanggal_bergabung: string
@@ -26,28 +25,28 @@ export interface ProfilUser {
   last_login_at: string | null
 }
 
-// Batas ukuran foto sebelum encoding base64 (2MB) — dicek di server sebagai jaga-jaga
-// kalau validasi client-side ter-bypass.
-const MAX_FOTO_BASE64_LENGTH = Math.ceil((2 * 1024 * 1024 * 4) / 3) + 100 // ~2MB raw -> base64
+const MAX_FOTO_BASE64_LENGTH = Math.ceil((2 * 1024 * 1024 * 4) / 3) + 100 
 
 // ─── GET: Profil Saya ─────────────────────────────────────────────────────────
 
 export async function getProfilSaya() {
   const session = await requireRole(['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'])
-
   const supabase = await createClient()
 
-  // QUERY DIPERBARUI: Mengganti simpanan_bulanan menjadi wajib & sukarela
+  // PERBAIKAN: Gunakan db_user_id jika ada, fallback ke id biasa
+  // Ini mencegah error jika ID Auth dan ID tabel users berbeda
+  const targetId = session.db_user_id || session.id
+
   const { data, error } = await supabase
     .from('users')
     .select(
       'id, nik, nama, email, no_hp, no_rekening, nama_bank, foto_profil, role, simpanan_wajib_bulanan, simpanan_sukarela_bulanan, tanggal_bergabung, is_active, last_login_at'
     )
-    .eq('id', session.id)
-    .single()
+    .eq('id', targetId)
+    .maybeSingle() // <--- PERBAIKAN: Ganti .single() jadi .maybeSingle() agar tidak crash
 
   if (error || !data) {
-    return { data: null, error: error?.message ?? 'Profil tidak ditemukan' }
+    return { data: null, error: error?.message ?? 'Profil tidak ditemukan di database.' }
   }
 
   return { data: data as ProfilUser, error: null }
@@ -73,6 +72,9 @@ const UpdateProfilSchema = z.object({
 
 export async function updateProfilSaya(formData: FormData) {
   const session = await requireRole(['ANGGOTA', 'SEKRETARIS', 'BENDAHARA', 'KETUA', 'SUPERADMIN'])
+  
+  // PERBAIKAN: Sinkronkan dengan ID yang dipakai di getProfilSaya
+  const targetId = session.db_user_id || session.id
 
   const nama = (formData.get('nama') as string) ?? ''
   const email = (formData.get('email') as string) ?? ''
@@ -86,7 +88,6 @@ export async function updateProfilSaya(formData: FormData) {
     redirect(`/dashboard/profil/edit?error=${encodeURIComponent(msg)}`)
   }
 
-  // Validasi ukuran foto jika ada perubahan foto baru dikirim
   if (fotoBase64 && fotoBase64.startsWith('data:image') && fotoBase64.length > MAX_FOTO_BASE64_LENGTH) {
     redirect(`/dashboard/profil/edit?error=${encodeURIComponent('Ukuran foto terlalu besar, maksimal 2MB')}`)
   }
@@ -100,15 +101,13 @@ export async function updateProfilSaya(formData: FormData) {
     updated_at: new Date().toISOString(),
   }
 
-  // Hanya update foto kalau ada data baru dikirim (string base64 valid).
-  // Kalau kosong/undefined, foto lama dipertahankan.
   if (fotoBase64 && fotoBase64.startsWith('data:image')) {
     updateData.foto_profil = fotoBase64
   } else if (fotoBase64 === '__REMOVE__') {
     updateData.foto_profil = null
   }
 
-  const { error } = await supabase.from('users').update(updateData).eq('id', session.id)
+  const { error } = await supabase.from('users').update(updateData).eq('id', targetId)
 
   if (error) {
     redirect(`/dashboard/profil/edit?error=${encodeURIComponent('Gagal menyimpan profil: ' + error.message)}`)
