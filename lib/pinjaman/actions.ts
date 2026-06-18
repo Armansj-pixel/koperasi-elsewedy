@@ -24,16 +24,22 @@ export type CicilanStatus = 'SCHEDULED' | 'PAID' | 'OVERDUE' | 'WAIVED'
 export interface Pinjaman {
   id: number
   user_id: string
-  nominal: number
+  nomor_kontrak: string
+  nominal_pokok: number
   biaya_admin: number
-  total_diterima: number
+  pelunasan_pinjaman_lama_id: number | null
+  pelunasan_pinjaman_lama: number | null
+  nominal_diterima: number
   tenor_bulan: number
   cicilan_per_bulan: number
+  sisa_pokok: number
+  sisa_cicilan: number
+  cicilan_mulai_periode: string
   status: PinjamanStatus
-  tanggal_pengajuan: string
-  tanggal_disetujui: string | null
-  tanggal_pencairan: string | null
-  tanggal_jatuh_tempo: string | null
+  tujuan: string
+  tanggal_pengajuan: string | null
+  tanggal_cair: string | null
+  tanggal_lunas: string | null
   catatan_pengaju: string | null
   catatan_l1: string | null
   catatan_l2: string | null
@@ -62,9 +68,13 @@ export interface CicilanPinjaman {
   created_at: string
 }
 
-export interface PinjamanWithUser extends Pinjaman {
+// Type khusus untuk kompatibilitas UI yang sudah ada
+export interface PinjamanWithUser extends Partial<Pinjaman> {
   user_nama: string
   user_nik: string
+  nominal: number
+  total_diterima: number
+  tanggal_pencairan: string | null
 }
 
 // ─── Kalkulasi ────────────────────────────────────────────────────────────────
@@ -101,6 +111,7 @@ function generateJadwalCicilan(
       nominal_cicilan: nominalCicilan,
       tanggal_jatuh_tempo: jatuhTempo.toISOString().split('T')[0],
       status: 'SCHEDULED' as CicilanStatus,
+      created_at: new Date().toISOString()
     })
   }
 
@@ -137,6 +148,9 @@ export async function getPinjamanList(filter?: {
 
   const result: PinjamanWithUser[] = (pinjaman ?? []).map((p) => ({
     ...p,
+    nominal: p.nominal_pokok, // Translasi untuk UI
+    total_diterima: p.nominal_diterima, // Translasi untuk UI
+    tanggal_pencairan: p.tanggal_cair, // Translasi untuk UI
     user_nama: userMap.get(p.user_id)?.nama ?? 'Unknown',
     user_nik: userMap.get(p.user_id)?.nik ?? '-',
   }))
@@ -188,6 +202,9 @@ export async function getPinjamanDetail(id: number) {
   return {
     data: {
       ...pinjaman,
+      nominal: pinjaman.nominal_pokok, // Translasi
+      total_diterima: pinjaman.nominal_diterima, // Translasi
+      tanggal_pencairan: pinjaman.tanggal_cair, // Translasi
       user_nama: user?.nama ?? 'Unknown',
       user_nik: user?.nik ?? '-',
       user_no_hp: user?.no_hp ?? '-',
@@ -207,9 +224,10 @@ export async function getPinjamanDetail(id: number) {
 export async function getPinjamanAktifAnggota(userId: string) {
   const supabase = await createClient()
 
+  // Ambil data dengan alias agar form UI Top-Up otomatis langsung bisa membacanya
   const { data } = await supabase
     .from('pinjaman')
-    .select('id, nominal, tenor_bulan, cicilan_per_bulan, status, tanggal_pengajuan')
+    .select('id, nominal:nominal_pokok, tenor_bulan, cicilan_per_bulan, status, tanggal_pengajuan')
     .eq('user_id', userId)
     .in('status', ['PENDING_L1', 'PENDING_L2', 'PENDING_L3', 'APPROVED', 'DISBURSED', 'ACTIVE'])
     .order('created_at', { ascending: false })
@@ -217,12 +235,10 @@ export async function getPinjamanAktifAnggota(userId: string) {
   return data ?? []
 }
 
-// ─── ACTION: Ajukan Pinjaman (Dengan Logika Top-Up Auto-Settlement) ───────────
+// ─── ACTION: Ajukan Pinjaman (Dengan Logika Top-Up Asli) ──────────────────────
 
 const AjukanPinjamanSchema = z.object({
-  // Plafon dikunci maksimal 15.000.000
   nominal: z.number().min(100000, 'Minimal pinjaman Rp 100.000').max(15000000, 'Maksimal pinjaman Rp 15.000.000'),
-  // Tenor dikunci maksimal 12 bulan
   tenor_bulan: z.number().min(1).max(12),
   catatan_pengaju: z.string().optional(),
 })
@@ -246,11 +262,10 @@ export async function ajukanPinjaman(formData: FormData) {
   }
 
   const supabase = await createClient()
-
-  // 1. Cek pinjaman aktif / status top up
   const pinjamanAktif = await getPinjamanAktifAnggota(session.id)
   
   let sisaPelunasanLama = 0
+  let idPinjamanLamaLunas: number | null = null
   let catatanTopUp = ''
 
   if (pinjamanAktif.length > 0) {
@@ -269,45 +284,50 @@ export async function ajukanPinjaman(formData: FormData) {
 
       const jumlahSisaBulan = cicilanBelumLunas?.length || 0
 
-      // Batas Refinancing: Maksimal sisa 3 bulan
       if (jumlahSisaBulan > 3) {
-        redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Pengajuan ditolak. Sisa cicilan Anda masih ${jumlahSisaBulan} kali. Top-Up hanya berlaku jika sisa cicilan maksimal 3 kali.`)}`)
+        redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Pengajuan ditolak. Sisa cicilan Anda masih ${jumlahSisaBulan} kali. Top-Up maksimal sisa 3 kali.`)}`)
       }
 
       sisaPelunasanLama = cicilanBelumLunas?.reduce((total, item) => total + Number(item.nominal_cicilan), 0) || 0
-      catatanTopUp = `\n\n[SISTEM TOP-UP] Dana pencairan ini akan dipotong otomatis sebesar Rp ${sisaPelunasanLama.toLocaleString('id-ID')} untuk melunasi Pinjaman ID #${pinjamanSekarang.id}.`
+      idPinjamanLamaLunas = pinjamanSekarang.id
+      catatanTopUp = `\n\n[SISTEM TOP-UP] Pencairan dipotong otomatis Rp ${sisaPelunasanLama.toLocaleString('id-ID')} untuk pelunasan kontrak lama.`
     }
   }
 
-  // 2. Kalkulasi Pinjaman
   const { biayaAdmin, totalDiterima, cicilanPerBulan } = await hitungPinjaman(nominal, tenor)
   const totalDiterimaBersih = totalDiterima - sisaPelunasanLama
 
   if (totalDiterimaBersih <= 0) {
-    redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent('Nominal pengajuan terlalu kecil untuk menutupi potongan sisa pinjaman lama.')}`)
+    redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent('Nominal pengajuan terlalu kecil untuk menutupi sisa pinjaman lama.')}`)
   }
 
   const catatanFinal = ((parsed.data.catatan_pengaju ?? '').trim() + catatanTopUp).trim()
 
-  // 3. Insert ke database
   const { data: pinjaman, error } = await supabase
     .from('pinjaman')
     .insert({
       user_id: session.id,
-      nominal,
+      nomor_kontrak: `PINJ-${Date.now()}`,
+      nominal_pokok: nominal,
       biaya_admin: biayaAdmin,
-      total_diterima: totalDiterimaBersih,
+      pelunasan_pinjaman_lama_id: idPinjamanLamaLunas,
+      pelunasan_pinjaman_lama: sisaPelunasanLama > 0 ? sisaPelunasanLama : null,
+      nominal_diterima: totalDiterimaBersih,
       tenor_bulan: tenor,
       cicilan_per_bulan: cicilanPerBulan,
+      sisa_pokok: nominal,
+      sisa_cicilan: tenor,
+      cicilan_mulai_periode: new Date().toISOString().slice(0, 7),
+      tujuan: (parsed.data.catatan_pengaju || 'Pinjaman Reguler').trim(),
       status: 'PENDING_L1',
-      tanggal_pengajuan: new Date().toISOString().split('T')[0],
+      tanggal_pengajuan: new Date().toISOString(),
       catatan_pengaju: catatanFinal || null,
     })
     .select()
     .single()
 
   if (error || !pinjaman) {
-    redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent('Gagal mengajukan pinjaman: ' + (error?.message ?? ''))}`)
+    redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent('Gagal mengajukan: ' + (error?.message ?? ''))}`)
   }
 
   revalidatePath('/dashboard/pinjaman')
@@ -357,6 +377,8 @@ export async function approvePinjaman(formData: FormData) {
       ...updateData,
       status: 'REJECTED',
       rejected_reason: catatan.trim(),
+      rejected_by: session.id,
+      rejected_at: new Date().toISOString(),
     }
   } else {
     const nextStatus: Record<string, PinjamanStatus> = {
@@ -380,7 +402,6 @@ export async function approvePinjaman(formData: FormData) {
         approved_l3_by: session.id,
         approved_l3_at: new Date().toISOString(),
         catatan_l3: catatan.trim() || null,
-        tanggal_disetujui: new Date().toISOString().split('T')[0],
       },
     }
 
@@ -428,16 +449,13 @@ export async function cairkanPinjaman(formData: FormData) {
   }
 
   const tanggalMulai = tanggalCairan ? new Date(tanggalCairan) : new Date()
-  const tanggalJatuhTempo = new Date(tanggalMulai)
-  tanggalJatuhTempo.setMonth(tanggalJatuhTempo.getMonth() + pinjaman.tenor_bulan)
 
   // 1. Update status pinjaman baru menjadi ACTIVE
   const { error: updateError } = await supabase
     .from('pinjaman')
     .update({
       status: 'ACTIVE',
-      tanggal_pencairan: tanggalMulai.toISOString().split('T')[0],
-      tanggal_jatuh_tempo: tanggalJatuhTempo.toISOString().split('T')[0],
+      tanggal_cair: tanggalMulai.toISOString().split('T')[0],
       disbursed_by: session.id,
       disbursed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -451,7 +469,7 @@ export async function cairkanPinjaman(formData: FormData) {
   // 2. Generate jadwal cicilan baru
   const jadwal = generateJadwalCicilan(
     pinjamanId,
-    pinjaman.nominal,
+    pinjaman.nominal_pokok,
     pinjaman.tenor_bulan,
     pinjaman.cicilan_per_bulan,
     tanggalMulai
@@ -464,16 +482,9 @@ export async function cairkanPinjaman(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal generate jadwal cicilan: ' + cicilanError.message)}`)
   }
 
-  // 3. AUTO-SETTLEMENT TOP-UP: Tutup pinjaman lama jika ada
-  const { data: pinjamanLama } = await supabase
-    .from('pinjaman')
-    .select('id')
-    .eq('user_id', pinjaman.user_id)
-    .eq('status', 'ACTIVE')
-    .neq('id', pinjamanId)
-
-  if (pinjamanLama && pinjamanLama.length > 0) {
-    const oldLoanId = pinjamanLama[0].id
+  // 3. AUTO-SETTLEMENT TOP-UP: Tutup pinjaman lama jika ada relasinya
+  if (pinjaman.pelunasan_pinjaman_lama_id) {
+    const oldLoanId = pinjaman.pelunasan_pinjaman_lama_id
 
     await supabase
       .from('cicilan_pinjaman')
@@ -486,13 +497,17 @@ export async function cairkanPinjaman(formData: FormData) {
 
     await supabase
       .from('pinjaman')
-      .update({ status: 'LUNAS', updated_at: new Date().toISOString() })
+      .update({ 
+        status: 'LUNAS', 
+        tanggal_lunas: tanggalMulai.toISOString().split('T')[0],
+        updated_at: new Date().toISOString() 
+      })
       .eq('id', oldLoanId)
   }
 
   revalidatePath('/dashboard/pinjaman')
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
-  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pencairan berhasil! Jadwal cicilan dibuat (dan pelunasan Top-Up dieksekusi jika ada).')}`)
+  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pencairan berhasil! Jadwal cicilan & pelunasan berjalan otomatis.')}`)
 }
 
 // ─── ACTION: Bayar Cicilan (Bulanan) ──────────────────────────────────────────
@@ -529,7 +544,11 @@ export async function bayarCicilan(formData: FormData) {
   if (semuaLunas) {
     await supabase
       .from('pinjaman')
-      .update({ status: 'LUNAS', updated_at: new Date().toISOString() })
+      .update({ 
+        status: 'LUNAS', 
+        tanggal_lunas: new Date().toISOString().split('T')[0],
+        updated_at: new Date().toISOString() 
+      })
       .eq('id', pinjamanId)
   }
 
@@ -572,13 +591,11 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal memperbarui status cicilan: ' + cicilanError.message)}`)
   }
 
-  let catatanTambahan = '\n[PELUNASAN DIPERCEPAT]'
-  if (buktiTransfer) catatanTambahan += ` Catatan: ${buktiTransfer.trim()}`
-
   const { error: lunasError } = await supabase
     .from('pinjaman')
     .update({ 
       status: 'LUNAS', 
+      tanggal_lunas: tanggalPelunasan,
       updated_at: new Date().toISOString()
     })
     .eq('id', pinjamanId)
@@ -589,120 +606,7 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
 
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
   revalidatePath('/dashboard/pinjaman')
-  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan pinjaman berhasil diproses. Status pinjaman sekarang LUNAS.')}`)
+  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan berhasil diproses. Status pinjaman sekarang LUNAS.')}`)
 }
 
-// ─── ACTION: Input Pinjaman Existing (Migrasi) ────────────────────────────────
-
-const PinjamanExistingSchema = z.object({
-  user_id: z.string().uuid('User ID tidak valid'),
-  nominal: z.number().min(1),
-  // Mengikuti aturan limit 12 bulan
-  tenor_bulan: z.number().min(1).max(12),
-  cicilan_terbayar: z.number().min(0),
-  tanggal_pencairan: z.string().min(1, 'Tanggal pencairan wajib diisi'),
-  catatan: z.string().optional(),
-})
-
-export async function inputPinjamanExisting(formData: FormData) {
-  // Masih diizinkan untuk SUPERADMIN agar Mas bisa bantu migrasi awal
-  const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
-
-  const nominalRaw = (formData.get('nominal') as string) ?? ''
-  const nominal = parseInt(nominalRaw.replace(/\D/g, ''))
-  const tenor = parseInt(formData.get('tenor_bulan') as string)
-  const cicilan_terbayar = parseInt(formData.get('cicilan_terbayar') as string) || 0
-  const tanggal_pencairan = formData.get('tanggal_pencairan') as string
-
-  const parsed = PinjamanExistingSchema.safeParse({
-    user_id: formData.get('user_id') as string,
-    nominal,
-    tenor_bulan: tenor,
-    cicilan_terbayar,
-    tanggal_pencairan,
-    catatan: formData.get('catatan') as string,
-  })
-
-  if (!parsed.success) {
-    const msg = parsed.error.errors[0]?.message ?? 'Validasi gagal'
-    redirect(`/dashboard/pinjaman/existing?error=${encodeURIComponent(msg)}`)
-  }
-
-  const { biayaAdmin, totalDiterima, cicilanPerBulan } = await hitungPinjaman(nominal, tenor)
-  const tanggalCairan = new Date(tanggal_pencairan)
-  const tanggalJatuhTempo = new Date(tanggalCairan)
-  tanggalJatuhTempo.setMonth(tanggalJatuhTempo.getMonth() + tenor)
-
-  const supabase = await createClient()
-
-  const { data: pinjaman, error } = await supabase
-    .from('pinjaman')
-    .insert({
-      user_id: parsed.data.user_id,
-      nominal,
-      biaya_admin: biayaAdmin,
-      total_diterima: totalDiterima,
-      tenor_bulan: tenor,
-      cicilan_per_bulan: cicilanPerBulan,
-      status: cicilan_terbayar >= tenor ? 'LUNAS' : 'ACTIVE',
-      tanggal_pengajuan: tanggal_pencairan,
-      tanggal_disetujui: tanggal_pencairan,
-      tanggal_pencairan: tanggal_pencairan,
-      tanggal_jatuh_tempo: tanggalJatuhTempo.toISOString().split('T')[0],
-      disbursed_by: session.id,
-      disbursed_at: new Date().toISOString(),
-      catatan_pengaju: `[MIGRASI] ${parsed.data.catatan ?? ''}`.trim(),
-    })
-    .select()
-    .single()
-
-  if (error || !pinjaman) {
-    redirect(`/dashboard/pinjaman/existing?error=${encodeURIComponent('Gagal input pinjaman: ' + (error?.message ?? ''))}`)
-  }
-
-  const jadwal = generateJadwalCicilan(
-    pinjaman.id,
-    nominal,
-    tenor,
-    cicilanPerBulan,
-    tanggalCairan
-  )
-
-  const jadwalWithStatus = jadwal.map((c, i) => ({
-    ...c,
-    status: i < cicilan_terbayar ? ('PAID' as CicilanStatus) : ('SCHEDULED' as CicilanStatus),
-    tanggal_pembayaran: i < cicilan_terbayar ? tanggal_pencairan : null,
-  }))
-
-  await supabase.from('cicilan_pinjaman').insert(jadwalWithStatus)
-
-  revalidatePath('/dashboard/pinjaman')
-  redirect(`/dashboard/pinjaman/${pinjaman.id}?success=${encodeURIComponent('Data pinjaman existing berhasil diinput')}`)
-}
-
-// ─── GET: Statistik Pinjaman ──────────────────────────────────────────────────
-
-export async function getStatistikPinjaman() {
-  const supabase = await createClient()
-
-  const { data: pinjaman } = await supabase
-    .from('pinjaman')
-    .select('nominal, status, cicilan_per_bulan')
-
-  if (!pinjaman) return { total: 0, aktif: 0, pending: 0, lunas: 0, totalOutstanding: 0 }
-
-  const aktif = pinjaman.filter((p) => p.status === 'ACTIVE')
-  const pending = pinjaman.filter((p) =>
-    ['PENDING_L1', 'PENDING_L2', 'PENDING_L3', 'APPROVED'].includes(p.status)
-  )
-  const lunas = pinjaman.filter((p) => p.status === 'LUNAS')
-
-  return {
-    total: pinjaman.length,
-    aktif: aktif.length,
-    pending: pending.length,
-    lunas: lunas.length,
-    totalOutstanding: aktif.reduce((sum, p) => sum + (p.nominal ?? 0), 0),
-    totalCicilanBulanan: aktif.reduce((sum, p) => sum + (p.cicilan_per_bulan ?? 0), 0),
-  }
-}
+// ─── ACTION: Input Pinjaman Existing (Migrasi)
