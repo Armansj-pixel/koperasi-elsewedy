@@ -1,71 +1,43 @@
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client' // 🔥 KITA PANGGIL LANGSUNG DARI SUMBERNYA
+import { PrismaClient } from '@prisma/client'
 import { requireRole } from '@/lib/auth/session'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  // Buat koneksi sementara khusus untuk health check ini
   const prisma = new PrismaClient()
-  
   try {
     await requireRole(['SUPERADMIN'])
-
     const startTime = Date.now()
-    
-    // 1. Cek Database
-    let dbStatus = 'OFFLINE'
-    let dbLatency = 0
-    try {
-      const dbStart = Date.now()
-      // Melakukan "ping" ringan ke Supabase
-      await prisma.$queryRawUnsafe('SELECT 1')
-      dbLatency = Date.now() - dbStart
-      dbStatus = 'HEALTHY'
-    } catch (error) {
-      dbStatus = 'UNHEALTHY'
-    } finally {
-      // Wajib ditutup setelah selesai agar tidak membebani server
-      await prisma.$disconnect()
-    }
 
-    // 2. Cek Estimasi Memori Node.js (Vercel)
-    const memoryUsage = process.memoryUsage()
-    const memoryUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024)
-    const memoryTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024)
+    // 1. Cek Database & Ambil Audit Log Terbaru secara paralel
+    const [dbCheck, logs] = await Promise.all([
+      prisma.$queryRawUnsafe('SELECT 1'),
+      prisma.audit_log.findMany({
+        take: 10,
+        orderBy: { created_at: 'desc' },
+        include: { user: { select: { nama: true } } }
+      })
+    ])
 
-    // 3. Hitung Total Latensi API
-    const totalLatency = Date.now() - startTime
+    const dbLatency = Date.now() - startTime
+
+    // 2. Resource Server Info
+    const memory = process.memoryUsage()
 
     return NextResponse.json({
-      status: 'ONLINE',
+      status: 'HEALTHY',
       timestamp: new Date().toISOString(),
-      latency: `${totalLatency}ms`,
-      services: {
-        database: {
-          name: 'Supabase PostgreSQL',
-          status: dbStatus,
-          latency: `${dbLatency}ms`
-        },
-        apiServer: {
-          name: 'Vercel Serverless Engine',
-          status: 'HEALTHY',
-          uptime: `${Math.round(process.uptime())}s`
-        }
+      metrics: {
+        db_latency: `${dbLatency}ms`,
+        uptime: `${Math.round(process.uptime())}s`,
+        memory: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`
       },
-      environment: {
-        nodeVersion: process.version,
-        memory: `${memoryUsedMB}MB / ${memoryTotalMB}MB`,
-        platform: process.platform
-      }
-    }, { status: 200 })
-
+      audit_logs: logs
+    })
   } catch (error: any) {
-    // Pastikan koneksi tetap ditutup jika user ternyata bukan SuperAdmin
+    return NextResponse.json({ status: 'ERROR', message: error.message }, { status: 500 })
+  } finally {
     await prisma.$disconnect()
-    return NextResponse.json({ 
-      status: 'ERROR', 
-      message: error?.message ?? 'Unauthorized' 
-    }, { status: 401 })
   }
 }
