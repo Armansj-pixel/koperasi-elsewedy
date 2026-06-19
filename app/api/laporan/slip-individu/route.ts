@@ -26,8 +26,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error ?? 'Gagal mengambil data slip' }, { status: 403 })
     }
 
+    // 🔥 PERBAIKAN: Menambahkan "as any" agar lolos sensor TypeScript
     const buffer = await renderToBuffer(
-      React.createElement(SlipIndividuDocument, { slip })
+      React.createElement(SlipIndividuDocument, { slip }) as any
     )
 
     const safeNama = slip.user.nama.replace(/[^a-zA-Z0-9]/g, '-')
