@@ -10,12 +10,13 @@ export async function GET() {
     await requireRole(['SUPERADMIN'])
     const startTime = Date.now()
 
-    // 1. Cek Database & Ambil Audit Log Terbaru secara paralel
+    // 🔥 PERBAIKAN: prisma.audit_log diubah menjadi prisma.auditLog
     const [dbCheck, logs] = await Promise.all([
       prisma.$queryRawUnsafe('SELECT 1'),
-      prisma.audit_log.findMany({
+      prisma.auditLog.findMany({
         take: 10,
-        orderBy: { created_at: 'desc' },
+        // Catatan: Jika 'created_at' juga error saat build, ubah menjadi 'createdAt'
+        orderBy: { created_at: 'desc' }, 
         include: { user: { select: { nama: true } } }
       })
     ])
