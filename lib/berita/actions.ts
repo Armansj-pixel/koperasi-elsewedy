@@ -6,10 +6,10 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 // ─── Proteksi Role: Hanya untuk Sekretaris & SuperAdmin ─────────────────────────
-
 const ALLOWED_ROLES = ['SEKRETARIS', 'SUPERADMIN']
 
-export async function simpanBerita(formData: FormData) {
+// ─── 1. CREATE: Tambah Berita Baru ─────────────────────────────────────────────
+export async function buatBerita(formData: FormData) {
   await requireRole(ALLOWED_ROLES)
   
   const supabase = await createClient()
@@ -17,7 +17,8 @@ export async function simpanBerita(formData: FormData) {
   if (!user) throw new Error("Unauthorized")
 
   const judul = formData.get('judul') as string
-  const slug = `${judul.toLowerCase().replace(/ /g, '-')}-${Date.now()}`
+  // Regex untuk membersihkan karakter aneh di judul agar slug URL tetap valid dan aman
+  const slug = `${judul.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`
   
   const data = {
     judul: judul,
@@ -35,6 +36,7 @@ export async function simpanBerita(formData: FormData) {
   const { error } = await supabase.from('berita').insert(data)
   
   if (error) {
+    console.error("Error insert berita:", error)
     return { error: 'Gagal menyimpan berita: ' + error.message }
   }
 
@@ -42,6 +44,7 @@ export async function simpanBerita(formData: FormData) {
   redirect('/dashboard/berita')
 }
 
+// ─── 2. UPDATE: Edit Berita ────────────────────────────────────────────────────
 export async function updateBerita(id: number, formData: FormData) {
   await requireRole(ALLOWED_ROLES)
   
@@ -64,6 +67,7 @@ export async function updateBerita(id: number, formData: FormData) {
     .eq('id', id)
 
   if (error) {
+    console.error("Error update berita:", error)
     return { error: 'Gagal mengupdate berita: ' + error.message }
   }
 
@@ -72,6 +76,7 @@ export async function updateBerita(id: number, formData: FormData) {
   redirect('/dashboard/berita')
 }
 
+// ─── 3. DELETE: Hapus Berita ───────────────────────────────────────────────────
 export async function hapusBerita(id: number) {
   await requireRole(ALLOWED_ROLES)
   
@@ -83,6 +88,7 @@ export async function hapusBerita(id: number) {
     .eq('id', id)
 
   if (error) {
+    console.error("Error delete berita:", error)
     return { error: 'Gagal menghapus berita: ' + error.message }
   }
 
@@ -90,24 +96,41 @@ export async function hapusBerita(id: number) {
   return { success: true }
 }
 
-// ─── Utility: Fetch Berita (Bisa diakses semua role) ──────────────────────────
+// ─── 4. READ: Fetch Data (Tanpa proteksi role, bisa diakses anggota) ───────────
 
+// Ambil semua daftar berita
 export async function getBeritaList() {
   const supabase = await createClient()
+  
+  // Logika Order: Yang di-pin tampil di atas, lalu diurutkan dari yang paling baru
   const { data, error } = await supabase
     .from('berita')
     .select('*')
+    .order('is_pinned', { ascending: false })
     .order('created_at', { ascending: false })
 
   return { data: data ?? [], error }
 }
 
+// Ambil 1 berita berdasarkan ID (Untuk halaman Edit Admin)
 export async function getBeritaDetail(id: number) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('berita')
     .select('*')
     .eq('id', id)
+    .single()
+
+  return { data, error }
+}
+
+// Ambil 1 berita berdasarkan Slug (Untuk halaman Baca Anggota)
+export async function getBeritaBySlug(slug: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('berita')
+    .select('*')
+    .eq('slug', slug)
     .single()
 
   return { data, error }
