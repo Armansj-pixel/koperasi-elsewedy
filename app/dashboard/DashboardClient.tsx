@@ -43,7 +43,7 @@ const modules = [
     allowedRoles: ["SUPERADMIN", "BENDAHARA"] 
   },
   { 
-    icon: "📰", label: "Berita",    href: "#",                   isActive: true, bg: "#e0f2fe",
+    icon: "📰", label: "Berita",    href: "/dashboard/berita",                   isActive: true, bg: "#e0f2fe",
     allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS", "ANGGOTA"] 
   },
   { 
