@@ -68,10 +68,13 @@ export interface CicilanPinjaman {
   created_at: string
 }
 
-// Type khusus untuk kompatibilitas UI yang sudah ada
+// Type khusus untuk kompatibilitas UI yang sudah ada agar tidak memicu build-error
 export interface PinjamanWithUser extends Partial<Pinjaman> {
   user_nama: string
   user_nik: string
+  user_no_hp?: string
+  user_bank?: string
+  user_nomor_rekening?: string
   nominal: number
   total_diterima: number
   tanggal_pencairan: string | null
@@ -148,9 +151,9 @@ export async function getPinjamanList(filter?: {
 
   const result: PinjamanWithUser[] = (pinjaman ?? []).map((p) => ({
     ...p,
-    nominal: p.nominal_pokok, // Translasi untuk UI
-    total_diterima: p.nominal_diterima, // Translasi untuk UI
-    tanggal_pencairan: p.tanggal_cair, // Translasi untuk UI
+    nominal: p.nominal_pokok, // Translasi kompatibilitas UI
+    total_diterima: p.nominal_diterima, // Translasi kompatibilitas UI
+    tanggal_pencairan: p.tanggal_cair, // Translasi kompatibilitas UI
     user_nama: userMap.get(p.user_id)?.nama ?? 'Unknown',
     user_nik: userMap.get(p.user_id)?.nik ?? '-',
   }))
@@ -163,17 +166,18 @@ export async function getPinjamanList(filter?: {
 export async function getPinjamanDetail(id: number) {
   const supabase = await createClient()
 
-  const { data: pinjaman, error } = await supabase
+  const { data: pinjaman, error: fetchError } = await supabase
     .from('pinjaman')
     .select('*')
     .eq('id', id)
     .single()
 
-  if (error || !pinjaman) return { data: null, cicilan: [], error: error?.message ?? 'Not found' }
+  if (fetchError || !pinjaman) return { data: null, cicilan: [], error: fetchError?.message ?? 'Not found' }
 
+  // Menarik profil lengkap yang sudah Mas sediakan di tabel users
   const { data: user } = await supabase
     .from('users')
-    .select('id, nama, nik')
+    .select('id, nama, nik, no_hp, bank, nomor_rekening')
     .eq('id', pinjaman.user_id)
     .single()
 
@@ -202,12 +206,14 @@ export async function getPinjamanDetail(id: number) {
   return {
     data: {
       ...pinjaman,
-      nominal: pinjaman.nominal_pokok, // Translasi
-      total_diterima: pinjaman.nominal_diterima, // Translasi
-      tanggal_pencairan: pinjaman.tanggal_cair, // Translasi
+      nominal: pinjaman.nominal_pokok, // Translasi UI
+      total_diterima: pinjaman.nominal_diterima, // Translasi UI
+      tanggal_pencairan: pinjaman.tanggal_cair, // Translasi UI
       user_nama: user?.nama ?? 'Unknown',
       user_nik: user?.nik ?? '-',
-      user_no_hp: '-',
+      user_no_hp: user?.no_hp ?? '-',
+      user_bank: user?.bank ?? '-',
+      user_nomor_rekening: user?.nomor_rekening ?? '-',
       user_simpanan_bulanan: 0,
       nama_l1: pinjaman.approved_l1_by ? approverMap.get(pinjaman.approved_l1_by) ?? '-' : null,
       nama_l2: pinjaman.approved_l2_by ? approverMap.get(pinjaman.approved_l2_by) ?? '-' : null,
@@ -224,7 +230,6 @@ export async function getPinjamanDetail(id: number) {
 export async function getPinjamanAktifAnggota(userId: string) {
   const supabase = await createClient()
 
-  // Ambil data dengan alias agar form UI Top-Up otomatis langsung bisa membacanya
   const { data } = await supabase
     .from('pinjaman')
     .select('id, nominal:nominal_pokok, tenor_bulan, cicilan_per_bulan, status, tanggal_pengajuan')
@@ -482,7 +487,7 @@ export async function cairkanPinjaman(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal generate jadwal cicilan: ' + cicilanError.message)}`)
   }
 
-  // 3. AUTO-SETTLEMENT TOP-UP: Tutup pinjaman lama jika ada relasinya
+  // 3. AUTO-SETTLEMENT TOP-UP: Tutup pinjaman lama secara otomatis jika ada relasinya
   if (pinjaman.pelunasan_pinjaman_lama_id) {
     const oldLoanId = pinjaman.pelunasan_pinjaman_lama_id
 
@@ -564,7 +569,6 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
 
   const pinjamanId = parseInt(formData.get('pinjaman_id') as string)
   const tanggalPelunasan = (formData.get('tanggal_pembayaran') as string) || new Date().toISOString().split('T')[0]
-  const buktiTransfer = formData.get('catatan') as string 
 
   const supabase = await createClient()
 
@@ -724,4 +728,3 @@ export async function getStatistikPinjaman() {
     totalCicilanBulanan: aktif.reduce((sum, p) => sum + (p.cicilan_per_bulan ?? 0), 0),
   }
 }
-
