@@ -22,8 +22,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error ?? 'Gagal mengambil data rekap' }, { status: 500 })
     }
 
+    // 🔥 PERBAIKAN: Menambahkan "as any" agar lolos sensor TypeScript
     const buffer = await renderToBuffer(
-      React.createElement(RekapBulananDocument, { rekap })
+      React.createElement(RekapBulananDocument, { rekap }) as any
     )
 
     const filename = `Rekap-Potongan-Gaji-${rekap.periode}.pdf`
@@ -37,8 +38,6 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (err: any) {
-    // requireRole akan redirect kalau role tidak sesuai, tapi jika dipanggil
-    // langsung sebagai fetch (bukan navigasi), tangani sebagai error biasa.
     return NextResponse.json({ error: err?.message ?? 'Gagal membuat laporan' }, { status: 500 })
   }
 }
