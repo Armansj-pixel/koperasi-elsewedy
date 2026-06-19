@@ -121,7 +121,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
             <div className="flex justify-between items-center relative z-10">
               <div>
                 <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginBottom: 4 }}>
-                  Koperasi Elsewedy
+                  Koperasi Jasa Karyawan PT Elsewedy Electric Indonesia
                 </p>
                 <h1 style={{ fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: '-.02em' }}>
                   Dashboard
