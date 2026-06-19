@@ -35,7 +35,7 @@ const modules = [
     allowedRoles: ["SUPERADMIN", "KETUA", "BENDAHARA", "SEKRETARIS"] 
   },
   { 
-    icon: "📊", label: "Laporan",   href: "#",                   isActive: false, bg: "#ffe4e6",
+    icon: "📊", label: "Laporan HR",   href: "/dashboard/laporan",                   isActive: true, bg: "#ffe4e6",
     allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"] 
   },
   { 
