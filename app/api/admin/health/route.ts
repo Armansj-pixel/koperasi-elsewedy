@@ -1,29 +1,35 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma' // Sesuaikan dengan path instance prisma Mas
+import { PrismaClient } from '@prisma/client' // 🔥 KITA PANGGIL LANGSUNG DARI SUMBERNYA
 import { requireRole } from '@/lib/auth/session'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  // Buat koneksi sementara khusus untuk health check ini
+  const prisma = new PrismaClient()
+  
   try {
-    // Kunci akses hanya untuk SuperAdmin
     await requireRole(['SUPERADMIN'])
 
     const startTime = Date.now()
     
-    // 1. Cek Database (Supabase via Prisma)
+    // 1. Cek Database
     let dbStatus = 'OFFLINE'
     let dbLatency = 0
     try {
       const dbStart = Date.now()
-      await prisma.$queryRaw`SELECT 1`
+      // Melakukan "ping" ringan ke Supabase
+      await prisma.$queryRawUnsafe('SELECT 1')
       dbLatency = Date.now() - dbStart
       dbStatus = 'HEALTHY'
     } catch (error) {
       dbStatus = 'UNHEALTHY'
+    } finally {
+      // Wajib ditutup setelah selesai agar tidak membebani server
+      await prisma.$disconnect()
     }
 
-    // 2. Cek Estimasi Memori Node.js (Vercel Environment)
+    // 2. Cek Estimasi Memori Node.js (Vercel)
     const memoryUsage = process.memoryUsage()
     const memoryUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024)
     const memoryTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024)
@@ -55,6 +61,8 @@ export async function GET() {
     }, { status: 200 })
 
   } catch (error: any) {
+    // Pastikan koneksi tetap ditutup jika user ternyata bukan SuperAdmin
+    await prisma.$disconnect()
     return NextResponse.json({ 
       status: 'ERROR', 
       message: error?.message ?? 'Unauthorized' 
