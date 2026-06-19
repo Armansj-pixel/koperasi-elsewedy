@@ -177,7 +177,7 @@ export async function getPinjamanDetail(id: number) {
   // Menarik profil lengkap yang sudah Mas sediakan di tabel users
   const { data: user } = await supabase
     .from('users')
-    .select('id, nama, nik, no_hp, bank, nomor_rekening')
+    .select('*')
     .eq('id', pinjaman.user_id)
     .single()
 
