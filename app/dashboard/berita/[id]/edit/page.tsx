@@ -31,8 +31,11 @@ export default async function EditBeritaPage({ params }: { params: { id: string 
             <label style={{ display: "block", marginBottom: "8px", fontWeight: "600" }}>Kategori</label>
             <select name="kategori" defaultValue={berita.kategori} className="fintech-input" style={{ width: "100%", padding: "8px" }}>
               <option value="PENGUMUMAN">Pengumuman</option>
-              <option value="BERITA_UMUM">Berita Umum</option>
+              <option value="RAT">Rapat Anggota Tahunan (RAT)</option>
               <option value="SHU">Info SHU</option>
+              <option value="PENDIDIKAN">Pendidikan</option>
+              <option value="PROMO">Promo</option>
+              <option value="UMUM">Berita Umum</option>
             </select>
           </div>
           <div>
@@ -40,6 +43,7 @@ export default async function EditBeritaPage({ params }: { params: { id: string 
             <select name="status" defaultValue={berita.status} className="fintech-input" style={{ width: "100%", padding: "8px" }}>
               <option value="DRAFT">Draft</option>
               <option value="PUBLISHED">Published</option>
+              <option value="ARCHIVED">Archived (Arsip)</option>
             </select>
           </div>
         </div>
