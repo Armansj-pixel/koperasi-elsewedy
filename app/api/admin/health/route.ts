@@ -10,21 +10,24 @@ export async function GET() {
     await requireRole(['SUPERADMIN'])
     const startTime = Date.now()
 
-    // 🔥 PERBAIKAN: prisma.audit_log diubah menjadi prisma.auditLog
+    // 🔥 PERBAIKAN: created_at diubah menjadi createdAt untuk Prisma
     const [dbCheck, logs] = await Promise.all([
       prisma.$queryRawUnsafe('SELECT 1'),
       prisma.auditLog.findMany({
         take: 10,
-        // Catatan: Jika 'created_at' juga error saat build, ubah menjadi 'createdAt'
-        orderBy: { created_at: 'desc' }, 
+        orderBy: { createdAt: 'desc' }, 
         include: { user: { select: { nama: true } } }
       })
     ])
 
     const dbLatency = Date.now() - startTime
-
-    // 2. Resource Server Info
     const memory = process.memoryUsage()
+
+    // Format ulang data agar frontend NOC kita tidak ikut error
+    const formattedLogs = logs.map((log: any) => ({
+      ...log,
+      created_at: log.createdAt || log.created_at
+    }))
 
     return NextResponse.json({
       status: 'HEALTHY',
@@ -34,7 +37,7 @@ export async function GET() {
         uptime: `${Math.round(process.uptime())}s`,
         memory: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`
       },
-      audit_logs: logs
+      audit_logs: formattedLogs
     })
   } catch (error: any) {
     return NextResponse.json({ status: 'ERROR', message: error.message }, { status: 500 })
