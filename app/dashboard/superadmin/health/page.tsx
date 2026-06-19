@@ -117,7 +117,7 @@ export default function NOCCommandCenterPage() {
           
           {/* Radar Endpoints Card */}
           <div className="cyber-panel p-4 relative overflow-hidden flex-grow flex flex-col min-h-[220px]">
-            <h2 class="text-[10px] md:text-xs tracking-widest border-b border-emerald-900/50 pb-2 mb-3 font-bold uppercase text-white glow-text">Service Endpoints</h2>
+            <h2 className="text-[10px] md:text-xs tracking-widest border-b border-emerald-900/50 pb-2 mb-3 font-bold uppercase text-white glow-text">Service Endpoints</h2>
             
             {/* Animated SVG Radar */}
             <div className="absolute right-[-30px] top-[20px] opacity-20 pointer-events-none">
@@ -165,7 +165,7 @@ export default function NOCCommandCenterPage() {
 
           {/* Infrastructure Health Status Matrix */}
           <div className="cyber-panel p-4 font-mono-tech">
-            <h2 class="text-[10px] md:text-xs tracking-widest border-b border-emerald-900/50 pb-2 mb-3 font-bold uppercase text-white glow-text">Infrastructure Health</h2>
+            <h2 className="text-[10px] md:text-xs tracking-widest border-b border-emerald-900/50 pb-2 mb-3 font-bold uppercase text-white glow-text">Infrastructure Health</h2>
             <div className="grid grid-cols-2 gap-3 text-center">
               <div className="border border-emerald-900/50 p-2 bg-emerald-950/20">
                 <div className="text-[9px] text-emerald-600">MEM_HEAP</div>
@@ -177,7 +177,7 @@ export default function NOCCommandCenterPage() {
               </div>
               <div className="border border-emerald-900/50 p-2 bg-emerald-950/20">
                 <div className="text-[9px] text-emerald-600">DB_STORAGE</div>
-                <div className="text-xl md:text-2xl mt-1 glow-text-cyan">45<span class="text-[10px] text-emerald-700">%</span></div>
+                <div className="text-xl md:text-2xl mt-1 glow-text-cyan">45<span className="text-[10px] text-emerald-700">%</span></div>
               </div>
               <div className="border border-emerald-900/50 p-2 bg-emerald-950/20">
                 <div className="text-[9px] text-emerald-600">DISK_IO</div>
@@ -229,7 +229,7 @@ export default function NOCCommandCenterPage() {
           {/* Active Incident Queue Panel */}
           <div className="cyber-panel p-4 h-44 flex flex-col">
             <div className="flex justify-between items-end border-b border-emerald-900/50 pb-2 mb-2">
-              <h2 class="text-[10px] md:text-xs tracking-widest font-bold uppercase glow-text-yellow">Active Incident Queue</h2>
+              <h2 className="text-[10px] md:text-xs tracking-widest font-bold uppercase glow-text-yellow">Active Incident Queue</h2>
               <span className="text-[9px] font-mono-tech text-emerald-600">REALTIME THREAT CONSOLE</span>
             </div>
             
@@ -244,7 +244,7 @@ export default function NOCCommandCenterPage() {
               <div className="p-1.5 flex justify-between items-center bg-yellow-950/20 border-l-2 border-yellow-500">
                 <div className="flex gap-2 items-center">
                   <span className="bg-yellow-500 text-black px-1 py-0.2 rounded text-[8px] font-bold">P2</span>
-                  <span class="text-yellow-400">High API Endpoint Traffic (/api/laporan)</span>
+                  <span className="text-yellow-400">High API Endpoint Traffic (/api/laporan)</span>
                 </div>
                 <span className="text-gray-500 text-[9px]">15m ago</span>
               </div>
@@ -252,27 +252,27 @@ export default function NOCCommandCenterPage() {
           </div>
         </div>
 
-        /* PANEL KANAN: TRAFFIC MATRIX GRAPH & SECURITY MATRIX */
+        {/* PANEL KANAN: TRAFFIC MATRIX GRAPH & SECURITY MATRIX */}
         <div className="xl:col-span-3 flex flex-col gap-4">
           
           {/* Live Network Bandwidth Card */}
           <div className="cyber-panel p-4 border-l-2 border-l-cyan-500 flex flex-col justify-between">
-            <h2 class="text-[10px] md:text-xs tracking-widest border-b border-emerald-900/50 pb-2 mb-2 font-bold uppercase glow-text-cyan">Network Traffic</h2>
+            <h2 className="text-[10px] md:text-xs tracking-widest border-b border-emerald-900/50 pb-2 mb-2 font-bold uppercase glow-text-cyan">Network Traffic</h2>
             <div className="font-mono-tech">
               <div className="flex justify-between items-end mb-2">
                 <div>
                   <div className="text-[9px] text-cyan-700">INBOUND (Rx)</div>
-                  <div className="text-xl text-white font-bold">4.2<span class="text-xs text-cyan-500 ml-1">MB/s</span></div>
+                  <div className="text-xl text-white font-bold">4.2<span className="text-xs text-cyan-500 ml-1">MB/s</span></div>
                 </div>
                 <div className="text-right">
                   <div className="text-[9px] text-emerald-700">OUTBOUND (Tx)</div>
-                  <div className="text-lg text-emerald-100">1.8<span class="text-xs text-emerald-500 ml-1">MB/s</span></div>
+                  <div className="text-lg text-emerald-100">1.8<span className="text-xs text-emerald-500 ml-1">MB/s</span></div>
                 </div>
               </div>
               
               <div className="flex justify-between text-[9px] text-slate-400 mb-1">
-                <span>Pool Conns: <span class="text-white">42</span></span>
-                <span>Loss Rate: <span class="text-emerald-400">0.00%</span></span>
+                <span>Pool Conns: <span className="text-white">42</span></span>
+                <span>Loss Rate: <span className="text-emerald-400">0.00%</span></span>
               </div>
               
               {/* Simulated Tech Audio Bar Graph */}
@@ -291,7 +291,7 @@ export default function NOCCommandCenterPage() {
           {/* Real-time Security Shield Component */}
           <div className="cyber-panel p-4 border-l-2 border-l-emerald-500 flex-grow flex flex-col justify-between">
             <div>
-              <h2 class="text-[10px] md:text-xs tracking-widest border-b border-emerald-900/50 pb-2 mb-3 font-bold uppercase text-white glow-text">Security Engine</h2>
+              <h2 className="text-[10px] md:text-xs tracking-widest border-b border-emerald-900/50 pb-2 mb-3 font-bold uppercase text-white glow-text">Security Engine</h2>
               <ul className="font-mono-tech text-[10px] space-y-3">
                 <li className="flex items-start gap-2">
                   <span className="text-emerald-500 font-bold">✔</span>
