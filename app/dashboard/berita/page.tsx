@@ -3,37 +3,48 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 
 export default async function BeritaPage() {
-  // 1. Cek User dan Role-nya
+  // 1. Ambil Data User
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
-  // (Sesuaikan dengan nama tabel/kolom role di database Mas)
+  // 2. Cek Role di Tabel Users
   const { data: userData } = await supabase
     .from('users') 
     .select('role')
     .eq('id', user?.id)
     .single()
 
-  const role = userData?.role || 'ANGGOTA'
+  // 3. LOGIKA KUNCI: Ambil role dari DB, jika kosong ambil dari metadata Auth.
+  // Lalu wajibkan JADI HURUF BESAR SEMUA (.toUpperCase())
+  const rawRole = userData?.role || user?.user_metadata?.role || 'ANGGOTA'
+  const role = rawRole.toUpperCase()
+
   const isAdmin = role === 'SEKRETARIS' || role === 'SUPERADMIN'
 
-  // 2. Ambil data berita
+  // 4. Ambil data berita
   const { data: semuaBerita } = await getBeritaList()
 
-  // 3. Filter data: Anggota hanya boleh lihat yang PUBLISHED
+  // 5. Filter data: Anggota hanya boleh lihat yang PUBLISHED
   const beritaTampil = isAdmin 
     ? semuaBerita 
     : semuaBerita.filter((b: any) => b.status === 'PUBLISHED')
 
   // ==========================================
   // TAMPILAN UNTUK SEKRETARIS & SUPERADMIN
+  // (Di sinilah tombol Tambah/Edit/Hapus berada)
   // ==========================================
   if (isAdmin) {
     return (
       <div style={{ padding: "24px", maxWidth: "1000px", margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-          <h1 style={{ fontSize: "24px", fontWeight: "700", color: "#0f2d6b" }}>Kelola Berita</h1>
-          <Link href="/dashboard/berita/tambah" style={{ padding: "10px 20px", background: "#0f2d6b", color: "#fff", borderRadius: "6px", textDecoration: "none", fontWeight: "600" }}>
+          <div>
+            <h1 style={{ fontSize: "24px", fontWeight: "700", color: "#0f2d6b" }}>Kelola Berita</h1>
+            <p style={{ fontSize: "14px", color: "#6b7280", marginTop: "4px" }}>Login sebagai: <strong>{role}</strong></p>
+          </div>
+          <Link 
+            href="/dashboard/berita/tambah" 
+            style={{ padding: "10px 20px", background: "#0f2d6b", color: "#fff", borderRadius: "6px", textDecoration: "none", fontWeight: "600" }}
+          >
             + Tambah Berita
           </Link>
         </div>
@@ -43,6 +54,7 @@ export default async function BeritaPage() {
             <thead style={{ background: "#f9fafb", textAlign: "left" }}>
               <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
                 <th style={{ padding: "16px" }}>Judul</th>
+                <th style={{ padding: "16px" }}>Kategori</th>
                 <th style={{ padding: "16px" }}>Status</th>
                 <th style={{ padding: "16px" }}>Aksi</th>
               </tr>
@@ -52,23 +64,29 @@ export default async function BeritaPage() {
                 <tr key={berita.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
                   <td style={{ padding: "16px" }}>
                     <strong>{berita.judul}</strong>
-                    {berita.is_pinned && <span style={{ marginLeft: "8px" }}>📌</span>}
+                    {berita.is_pinned && <span style={{ marginLeft: "8px" }} title="Sematkan">📌</span>}
                   </td>
+                  <td style={{ padding: "16px", fontSize: "14px" }}>{berita.kategori}</td>
                   <td style={{ padding: "16px" }}>
-                    <span style={{ padding: "4px 8px", borderRadius: "4px", fontSize: "12px", background: berita.status === 'PUBLISHED' ? "#d1fae5" : "#fee2e2" }}>
+                    <span style={{ padding: "4px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "600", background: berita.status === 'PUBLISHED' ? "#d1fae5" : "#fee2e2", color: berita.status === 'PUBLISHED' ? "#065f46" : "#991b1b" }}>
                       {berita.status}
                     </span>
                   </td>
                   <td style={{ padding: "16px" }}>
-                    <div style={{ display: "flex", gap: "10px" }}>
-                      <Link href={`/dashboard/berita/${berita.id}/edit`} style={{ color: "#2563eb", fontWeight: "600" }}>Edit</Link>
+                    <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                      <Link href={`/dashboard/berita/${berita.id}/edit`} style={{ color: "#2563eb", fontWeight: "600", textDecoration: "none" }}>Edit</Link>
                       <form action={async () => { "use server"; await hapusBerita(berita.id) }}>
-                        <button type="submit" style={{ color: "#dc2626", fontWeight: "600", border: "none", background: "none", cursor: "pointer" }}>Hapus</button>
+                        <button type="submit" style={{ color: "#dc2626", fontWeight: "600", border: "none", background: "none", cursor: "pointer", padding: 0 }}>Hapus</button>
                       </form>
                     </div>
                   </td>
                 </tr>
               ))}
+              {beritaTampil.length === 0 && (
+                <tr>
+                  <td colSpan={4} style={{ padding: "24px", textAlign: "center", color: "#6b7280" }}>Belum ada berita yang dibuat.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -78,6 +96,7 @@ export default async function BeritaPage() {
 
   // ==========================================
   // TAMPILAN UNTUK ANGGOTA (GRID KARTU BERITA)
+  // (Mode Read-Only, tidak ada tombol manajemen)
   // ==========================================
   return (
     <div style={{ padding: "24px", maxWidth: "1000px", margin: "0 auto" }}>
@@ -110,7 +129,7 @@ export default async function BeritaPage() {
               <div style={{ padding: "20px", flex: 1, display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                   <span style={{ fontSize: "12px", fontWeight: "700", color: "#2563eb", textTransform: "uppercase" }}>{berita.kategori.replace('_', ' ')}</span>
-                  {berita.is_pinned && <span style={{ fontSize: "12px" }}>📌 Pinned</span>}
+                  {berita.is_pinned && <span style={{ fontSize: "12px", color: "#b45309", fontWeight: "600" }}>📌 Pinned</span>}
                 </div>
                 
                 <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#111827", marginBottom: "8px", lineHeight: "1.4" }}>
