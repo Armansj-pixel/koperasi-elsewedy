@@ -173,7 +173,7 @@ export async function getPinjamanDetail(id: number) {
 
   const { data: user } = await supabase
     .from('users')
-    .select('id, nama, nik, no_hp, simpanan_bulanan')
+    .select('id, nama, nik')
     .eq('id', pinjaman.user_id)
     .single()
 
