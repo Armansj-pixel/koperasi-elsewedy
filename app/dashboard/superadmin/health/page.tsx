@@ -47,7 +47,7 @@ export default function NOCDashboard() {
 
   return (
     <div className="min-h-screen bg-[#030a05] text-[#00ff41] p-4 md:p-6 flex flex-col relative" style={{ fontFamily: '"Share Tech Mono", monospace' }}>
-      {/* 🎨 CSS Khusus Tema Cyberpunk NOC yang di-inject langsung */}
+      {/* 🎨 CSS Khusus Tema Cyberpunk NOC */}
       <style dangerouslySetInnerHTML={{ __html: `
         .scanline {
           position: fixed; top: 0; left: 0; width: 100%; height: 5px;
@@ -92,7 +92,8 @@ export default function NOCDashboard() {
             <div className="text-lg md:text-xl glow">{data ? data.status : 'CONNECTING...'} <span className="inline-block w-2 h-2 bg-[#00ff41] rounded-full cursor-blink"></span></div>
           </div>
           <div className="text-right border-l border-emerald-900 pl-4">
-            <div class="text-emerald-700">API GATEWAY</div>
+            {/* 🔥 PERBAIKAN: class menjadi className */}
+            <div className="text-emerald-700">API GATEWAY</div>
             <div className="text-lg md:text-xl glow-cyan">SECURED</div>
           </div>
         </div>
