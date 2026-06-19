@@ -266,7 +266,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
                 </span>
               </div>
               <p style={{ fontSize: 10, color: '#94a3b8', lineHeight: 1.6, fontWeight: 500, margin: 0 }}>
-                © {new Date().getFullYear()} Koperasi PT Elsewedy<br />
+                © {new Date().getFullYear()} Koperasi Jasa Karyawan PT Elsewedy Electric Indonesia<br />
                 Developed by Carlo Tech™
               </p>
             </div>
