@@ -6,7 +6,8 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 // ─── Proteksi Role: Hanya untuk Sekretaris & SuperAdmin ─────────────────────────
-const ALLOWED_ROLES = ['SEKRETARIS', 'SUPERADMIN']
+type Role = "ANGGOTA" | "SEKRETARIS" | "BENDAHARA" | "KETUA" | "SUPERADMIN"
+const ALLOWED_ROLES: Role[] = ['SEKRETARIS', 'SUPERADMIN']
 
 // ─── 1. CREATE: Tambah Berita Baru ─────────────────────────────────────────────
 export async function buatBerita(formData: FormData) {
