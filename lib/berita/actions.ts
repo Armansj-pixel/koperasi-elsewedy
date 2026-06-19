@@ -17,7 +17,6 @@ export async function buatBerita(formData: FormData) {
   if (!user) throw new Error("Unauthorized")
 
   const judul = formData.get('judul') as string
-  // Regex untuk membersihkan karakter aneh di judul agar slug URL tetap valid dan aman
   const slug = `${judul.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`
   
   const data = {
@@ -37,7 +36,7 @@ export async function buatBerita(formData: FormData) {
   
   if (error) {
     console.error("Error insert berita:", error)
-    return { error: 'Gagal menyimpan berita: ' + error.message }
+    throw new Error('Gagal menyimpan berita: ' + error.message)
   }
 
   revalidatePath('/dashboard/berita')
@@ -68,7 +67,7 @@ export async function updateBerita(id: number, formData: FormData) {
 
   if (error) {
     console.error("Error update berita:", error)
-    return { error: 'Gagal mengupdate berita: ' + error.message }
+    throw new Error('Gagal mengupdate berita: ' + error.message)
   }
 
   revalidatePath('/dashboard/berita')
@@ -89,20 +88,16 @@ export async function hapusBerita(id: number) {
 
   if (error) {
     console.error("Error delete berita:", error)
-    return { error: 'Gagal menghapus berita: ' + error.message }
+    throw new Error('Gagal menghapus berita: ' + error.message)
   }
 
   revalidatePath('/dashboard/berita')
-  return { success: true }
 }
 
 // ─── 4. READ: Fetch Data (Tanpa proteksi role, bisa diakses anggota) ───────────
-
-// Ambil semua daftar berita
 export async function getBeritaList() {
   const supabase = await createClient()
   
-  // Logika Order: Yang di-pin tampil di atas, lalu diurutkan dari yang paling baru
   const { data, error } = await supabase
     .from('berita')
     .select('*')
@@ -112,7 +107,6 @@ export async function getBeritaList() {
   return { data: data ?? [], error }
 }
 
-// Ambil 1 berita berdasarkan ID (Untuk halaman Edit Admin)
 export async function getBeritaDetail(id: number) {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -124,7 +118,6 @@ export async function getBeritaDetail(id: number) {
   return { data, error }
 }
 
-// Ambil 1 berita berdasarkan Slug (Untuk halaman Baca Anggota)
 export async function getBeritaBySlug(slug: string) {
   const supabase = await createClient()
   const { data, error } = await supabase
