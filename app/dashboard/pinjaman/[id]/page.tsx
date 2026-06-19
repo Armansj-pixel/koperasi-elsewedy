@@ -15,6 +15,14 @@ function formatTanggal(d: string | null) {
   return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 }
 
+// Fungsi konversi nomor ke Link WhatsApp
+function getWhatsAppLink(phone: string) {
+  if (!phone || phone === '-') return '#';
+  let cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('0')) cleaned = '62' + cleaned.slice(1);
+  return `https://wa.me/${cleaned}`;
+}
+
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   PENDING_L1: { label: "Menunggu Sekretaris", bg: "#fef3c7", color: "#b45309" },
   PENDING_L2: { label: "Menunggu Bendahara", bg: "#fed7aa", color: "#c2410c" },
@@ -362,14 +370,47 @@ export default async function PinjamanDetailPage({
                 <span style={{ fontSize: "12px", color: "#94a3b8" }}>NIK</span>
                 <span style={{ fontSize: "14px", color: "#1e293b" }}>{p.user_nik}</span>
               </div>
+              
+              {/* Tautan WhatsApp */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "12px", color: "#94a3b8" }}>No HP / WA</span>
+                {p.user_no_hp && p.user_no_hp !== '-' ? (
+                  <a 
+                    href={getWhatsAppLink(p.user_no_hp)} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ 
+                      display: "inline-flex", 
+                      alignItems: "center", 
+                      gap: "6px",
+                      background: "#ecfdf5", 
+                      color: "#10b981", 
+                      padding: "4px 10px", 
+                      borderRadius: "20px", 
+                      fontWeight: "600", 
+                      textDecoration: "none",
+                      fontSize: "13px"
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                    </svg>
+                    {p.user_no_hp}
+                  </a>
+                ) : (
+                  <span style={{ fontSize: "14px", color: "#1e293b" }}>-</span>
+                )}
+              </div>
+
+              {/* Bank & Rekening */}
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", color: "#94a3b8" }}>No HP</span>
-                <span style={{ fontSize: "14px", color: "#1e293b" }}>{p.user_no_hp}</span>
+                <span style={{ fontSize: "12px", color: "#94a3b8" }}>Bank</span>
+                <span style={{ fontSize: "14px", color: "#1e293b" }}>{p.user_bank || '-'}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "12px", color: "#94a3b8" }}>Simpanan Bulanan</span>
-                <span style={{ fontSize: "14px", fontWeight: "600", color: "#16a34a" }}>
-                  {formatRupiah(p.user_simpanan_bulanan ?? 0)}
+                <span style={{ fontSize: "12px", color: "#94a3b8" }}>No. Rekening</span>
+                <span style={{ fontSize: "14px", fontWeight: "600", color: "#1e293b", fontFamily: "monospace" }}>
+                  {p.user_nomor_rekening || '-'}
                 </span>
               </div>
             </div>
