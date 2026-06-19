@@ -207,8 +207,8 @@ export async function getPinjamanDetail(id: number) {
       tanggal_pencairan: pinjaman.tanggal_cair, // Translasi
       user_nama: user?.nama ?? 'Unknown',
       user_nik: user?.nik ?? '-',
-      user_no_hp: user?.no_hp ?? '-',
-      user_simpanan_bulanan: user?.simpanan_bulanan ?? 0,
+      user_no_hp: '-',
+      user_simpanan_bulanan: 0,
       nama_l1: pinjaman.approved_l1_by ? approverMap.get(pinjaman.approved_l1_by) ?? '-' : null,
       nama_l2: pinjaman.approved_l2_by ? approverMap.get(pinjaman.approved_l2_by) ?? '-' : null,
       nama_l3: pinjaman.approved_l3_by ? approverMap.get(pinjaman.approved_l3_by) ?? '-' : null,
