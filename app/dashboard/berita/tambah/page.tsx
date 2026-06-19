@@ -1,6 +1,5 @@
 import { buatBerita } from '@/lib/berita/actions'
 import { requireRole } from '@/lib/auth/session'
-import { redirect } from 'next/navigation'
 
 export default async function TambahBeritaPage() {
   // Hanya Sekretaris dan SuperAdmin yang boleh akses
@@ -25,16 +24,22 @@ export default async function TambahBeritaPage() {
           <div>
             <label style={{ display: "block", marginBottom: "8px", fontWeight: "600" }}>Kategori</label>
             <select name="kategori" className="fintech-input" style={{ width: "100%", padding: "8px" }}>
+              {/* Value sudah disesuaikan dengan Enum Database */}
               <option value="PENGUMUMAN">Pengumuman</option>
-              <option value="BERITA_UMUM">Berita Umum</option>
+              <option value="RAT">Rapat Anggota Tahunan (RAT)</option>
               <option value="SHU">Info SHU</option>
+              <option value="PENDIDIKAN">Pendidikan</option>
+              <option value="PROMO">Promo</option>
+              <option value="UMUM">Berita Umum</option>
             </select>
           </div>
           <div>
             <label style={{ display: "block", marginBottom: "8px", fontWeight: "600" }}>Status</label>
             <select name="status" className="fintech-input" style={{ width: "100%", padding: "8px" }}>
+              {/* Value sudah disesuaikan dengan Enum Database */}
               <option value="DRAFT">Draft</option>
               <option value="PUBLISHED">Published</option>
+              <option value="ARCHIVED">Archived (Arsip)</option>
             </select>
           </div>
         </div>
