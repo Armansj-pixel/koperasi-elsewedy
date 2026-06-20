@@ -1,273 +1,603 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { logoutAction } from "@/lib/auth/actions";
 import type { CurrentUser } from "@/lib/auth/session";
 
+// ─────────────────────────────────────────
+//  CONSTANTS
+// ─────────────────────────────────────────
 const roleLabels: Record<CurrentUser["role"], string> = {
-  ANGGOTA: "Anggota",
+  ANGGOTA:    "Anggota",
   SEKRETARIS: "Sekretaris",
-  BENDAHARA: "Bendahara",
-  KETUA: "Ketua",
+  BENDAHARA:  "Bendahara",
+  KETUA:      "Ketua",
   SUPERADMIN: "Super Admin",
 };
 
-const modules = [
-  { 
-    icon: "👥", label: "Anggota",   href: "/dashboard/anggota",  isActive: true,  bg: "#dbeafe",
-    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]
-  },
-  { 
-    icon: "💰", label: "Simpanan",  href: "/dashboard/simpanan", isActive: true,  bg: "#d1fae5",
-    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS", "ANGGOTA"] 
-  },
-  { 
-    icon: "💳", label: "Pinjaman",  href: "/dashboard/pinjaman", isActive: true,  bg: "#fef3c7",
-    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS", "ANGGOTA"] 
-  },
-  { 
-    icon: "👤", label: "Profil",    href: "/dashboard/profil",   isActive: true,  bg: "#f3e8ff",
-    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS", "ANGGOTA"] 
-  },
-  { 
-    icon: "✅", label: "Approval",  href: "#",                   isActive: false, bg: "#ede9fe",
-    allowedRoles: ["SUPERADMIN", "KETUA", "BENDAHARA", "SEKRETARIS"] 
-  },
-  { 
-    icon: "📊", label: "Laporan HR",   href: "/dashboard/laporan",                   isActive: true, bg: "#ffe4e6",
-    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"] 
-  },
-  { 
-    icon: "📒", label: "Kas Kecil", href: "#",                   isActive: false, bg: "#ccfbf1",
-    allowedRoles: ["SUPERADMIN", "BENDAHARA"] 
-  },
-  { 
-    icon: "📰", label: "Berita",    href: "/dashboard/berita",                   isActive: true, bg: "#e0f2fe",
-    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS", "ANGGOTA"] 
-  },
-  { 
-    icon: "📚", label: "Akuntansi", href: "#",                   isActive: false, bg: "#e0e7ff",
-    allowedRoles: ["SUPERADMIN", "BENDAHARA"] 
-  },
+const roleColors: Record<CurrentUser["role"], { bg: string; color: string; border: string; dot: string }> = {
+  ANGGOTA:    { bg: "#f0fdf4", color: "#15803d", border: "#86efac", dot: "#22c55e" },
+  SEKRETARIS: { bg: "#eff6ff", color: "#1d4ed8", border: "#93c5fd", dot: "#3b82f6" },
+  BENDAHARA:  { bg: "#fefce8", color: "#a16207", border: "#fde68a", dot: "#eab308" },
+  KETUA:      { bg: "#fdf4ff", color: "#7e22ce", border: "#d8b4fe", dot: "#a855f7" },
+  SUPERADMIN: { bg: "#fff1f2", color: "#be123c", border: "#fca5a5", dot: "#ef4444" },
+};
+
+const PENGURUS_ROLES = ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"] as const;
+
+type Module = {
+  icon: string;
+  label: string;
+  href: string;
+  isActive: boolean;
+  bg: string;
+  iconColor: string;
+  allowedRoles: string[];
+  desc: string;
+};
+
+const modules: Module[] = [
+  { icon: "👥", label: "Anggota",    href: "/dashboard/anggota",  isActive: true,  bg: "#dbeafe", iconColor: "#1d4ed8", desc: "Data keanggotaan",   allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS"] },
+  { icon: "💰", label: "Simpanan",   href: "/dashboard/simpanan", isActive: true,  bg: "#d1fae5", iconColor: "#059669", desc: "Kelola tabungan",    allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS","ANGGOTA"] },
+  { icon: "💳", label: "Pinjaman",   href: "/dashboard/pinjaman", isActive: true,  bg: "#fef3c7", iconColor: "#b45309", desc: "Pengajuan kredit",   allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS","ANGGOTA"] },
+  { icon: "👤", label: "Profil",     href: "/dashboard/profil",   isActive: true,  bg: "#f3e8ff", iconColor: "#7e22ce", desc: "Data pribadi",       allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS","ANGGOTA"] },
+  { icon: "✅", label: "Approval",   href: "#",                   isActive: false, bg: "#ede9fe", iconColor: "#6d28d9", desc: "Persetujuan",        allowedRoles: ["SUPERADMIN","KETUA","BENDAHARA","SEKRETARIS"] },
+  { icon: "📊", label: "Laporan HR", href: "/dashboard/laporan",  isActive: true,  bg: "#ffe4e6", iconColor: "#be123c", desc: "Analitik & rekap",   allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS"] },
+  { icon: "📒", label: "Kas Kecil",  href: "#",                   isActive: false, bg: "#ccfbf1", iconColor: "#0f766e", desc: "Arus kas harian",    allowedRoles: ["SUPERADMIN","BENDAHARA"] },
+  { icon: "📰", label: "Berita",     href: "/dashboard/berita",   isActive: true,  bg: "#e0f2fe", iconColor: "#0369a1", desc: "Info & pengumuman",  allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS","ANGGOTA"] },
+  { icon: "📚", label: "Akuntansi",  href: "#",                   isActive: false, bg: "#e0e7ff", iconColor: "#4338ca", desc: "Pembukuan",          allowedRoles: ["SUPERADMIN","BENDAHARA"] },
 ];
 
-export function DashboardClient({ user }: { user: CurrentUser }) {
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [isMemberMode, setIsMemberMode] = useState(false);
+function getGreeting(): { text: string; emoji: string } {
+  const h = new Date().getHours();
+  if (h >= 5  && h < 12) return { text: "Selamat Pagi",   emoji: "🌤️" };
+  if (h >= 12 && h < 15) return { text: "Selamat Siang",  emoji: "☀️" };
+  if (h >= 15 && h < 18) return { text: "Selamat Sore",   emoji: "🌆" };
+  return                          { text: "Selamat Malam", emoji: "🌙" };
+}
 
-  // 1. MEMBACA PILIHAN SEBELUMNYA DARI BROWSER SAAT HALAMAN DIMUAT
+// ─────────────────────────────────────────
+//  COMPONENT
+// ─────────────────────────────────────────
+export function DashboardClient({ user }: { user: CurrentUser }) {
+  const [loggingOut,   setLoggingOut]   = useState(false);
+  const [isMemberMode, setIsMemberMode] = useState(false);
+  const [greeting,     setGreeting]     = useState({ text: "Selamat Datang", emoji: "👋" });
+  const [logoutModal,  setLogoutModal]  = useState(false);
+
   useEffect(() => {
-    const savedMode = localStorage.getItem("kop_member_mode");
-    if (savedMode === "true") {
-      setIsMemberMode(true);
-    }
+    const saved = localStorage.getItem("kop_member_mode");
+    if (saved === "true") setIsMemberMode(true);
+    setGreeting(getGreeting());
   }, []);
 
-  // 2. FUNGSI UNTUK MENGGANTI MODE SEKALIGUS MENYIMPAN KE BROWSER
-  const toggleMode = () => {
-    setIsMemberMode((prevMode) => {
-      const newMode = !prevMode;
-      localStorage.setItem("kop_member_mode", String(newMode));
-      return newMode;
+  const toggleMode = useCallback(() => {
+    setIsMemberMode(prev => {
+      const next = !prev;
+      localStorage.setItem("kop_member_mode", String(next));
+      return next;
     });
-  };
+  }, []);
 
-  const isPengurus = ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"].includes(user.role);
-  const effectiveRole = (isPengurus && isMemberMode) ? "ANGGOTA" : user.role;
-
-  const allowedModules = modules.filter(module => 
-    module.allowedRoles.includes(effectiveRole)
-  );
+  const isPengurus     = PENGURUS_ROLES.includes(user.role as typeof PENGURUS_ROLES[number]);
+  const effectiveRole  = isPengurus && isMemberMode ? "ANGGOTA" : user.role;
+  const visibleModules = modules.filter(m => m.allowedRoles.includes(effectiveRole));
+  const activeModules  = visibleModules.filter(m => m.isActive);
+  const comingSoon     = visibleModules.filter(m => !m.isActive);
+  const rc             = roleColors[user.role];
 
   async function handleLogout() {
     setLoggingOut(true);
+    setLogoutModal(false);
     try {
-      // Hapus memori mode saat logout agar user berikutnya kembali default
       localStorage.removeItem("kop_member_mode");
       await logoutAction();
-    } catch {
-      // Abaikan internal error redirect Next.js
-    } finally {
-      setLoggingOut(false);
-    }
+    } catch { /* Next.js redirect — intentional */ }
+    finally { setLoggingOut(false); }
   }
 
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        .kop-shell { font-family: 'Inter', sans-serif; }
-        .kop-header { background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%); padding: 48px 24px 80px; position: relative; overflow: hidden; }
-        .kop-header::before { content: ''; position: absolute; top: -60px; right: -40px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(255,255,255,.12) 0%, transparent 70%); border-radius: 50%; pointer-events: none; }
-        .kop-header::after { content: ''; position: absolute; bottom: 20px; left: -30px; width: 140px; height: 140px; background: radial-gradient(circle, rgba(59,130,246,.25) 0%, transparent 70%); border-radius: 50%; pointer-events: none; }
-        .kop-logout-btn { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .2s; backdrop-filter: blur(8px); }
-        .kop-logout-btn:hover { background: rgba(255,255,255,.25); }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        *, *::before, *::after { box-sizing: border-box; }
+
+        .kop-shell { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+        /* ── Scroll ── */
+        .kop-page::-webkit-scrollbar { display: none; }
+        .kop-page { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ── Header ── */
+        .kop-header {
+          background: linear-gradient(150deg, #0a1e4a 0%, #0f2d6b 40%, #1a4db3 75%, #2563eb 100%);
+          padding: 52px 20px 88px;
+          position: relative; overflow: hidden;
+        }
+        .kop-orb {
+          position: absolute; border-radius: 50%;
+          pointer-events: none;
+        }
+
+        /* ── Logout Button ── */
+        .kop-logout-btn {
+          position: relative;
+          width: 42px; height: 42px;
+          border-radius: 13px;
+          background: rgba(255,255,255,.13);
+          border: 1px solid rgba(255,255,255,.22);
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: background .2s, transform .15s, box-shadow .2s;
+          backdrop-filter: blur(10px);
+          flex-shrink: 0;
+        }
+        .kop-logout-btn:hover:not(:disabled) {
+          background: rgba(255,255,255,.24);
+          transform: scale(1.06);
+          box-shadow: 0 4px 16px rgba(0,0,0,.25);
+        }
+        .kop-logout-btn:active:not(:disabled) { transform: scale(.95); }
         .kop-logout-btn:disabled { opacity: .6; cursor: not-allowed; }
-        .kop-card { background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 24px rgba(15,45,107,.07); }
-        .kop-menu-icon { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 22px; position: relative; transition: transform .2s, box-shadow .2s; }
-        .kop-menu-link:hover .kop-menu-icon { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,.12); }
-        .kop-ping-ring { position: absolute; inset: 0; border-radius: 50%; background: #3b82f6; opacity: .4; animation: kop-ping 1.4s ease-out infinite; }
-        @keyframes kop-ping { 0% { transform: scale(1); opacity: .4; } 70% { transform: scale(2.2); opacity: 0; } 100% { opacity: 0; } }
-        .kop-spin { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: kop-spin .7s linear infinite; }
+
+        /* ── Card Base ── */
+        .kop-card {
+          background: #fff;
+          border-radius: 20px;
+          border: 1px solid #eaeef5;
+          box-shadow: 0 4px 28px rgba(15,45,107,.1), 0 1px 3px rgba(0,0,0,.03);
+        }
+
+        /* ── Profile Avatar ── */
+        .kop-avatar {
+          width: 54px; height: 54px; border-radius: 16px; flex-shrink: 0;
+          background: linear-gradient(145deg, #dbeafe, #eff6ff);
+          border: 2px solid #bfdbfe;
+          display: flex; align-items: center; justify-content: center;
+          transition: transform .25s, box-shadow .25s;
+        }
+        .kop-avatar:hover {
+          transform: scale(1.05);
+          box-shadow: 0 6px 18px rgba(37,99,235,.22);
+        }
+
+        /* ── Toggle Switch ── */
+        .kop-toggle-row {
+          display: flex; align-items: center; justify-content: space-between; gap: 12px;
+          background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 13px;
+          padding: 11px 14px; cursor: pointer; user-select: none;
+          transition: background .2s, border-color .2s;
+        }
+        .kop-toggle-row:hover { background: #f1f5f9; border-color: #c7d7f0; }
+        .kop-switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+        .kop-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .kop-slider {
+          position: absolute; inset: 0; border-radius: 24px;
+          background: #cbd5e1; cursor: pointer;
+          transition: background .25s;
+        }
+        .kop-slider::before {
+          content: '';
+          position: absolute;
+          width: 18px; height: 18px; border-radius: 50%;
+          background: white; top: 3px; left: 3px;
+          transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+          box-shadow: 0 1px 4px rgba(0,0,0,.22);
+        }
+        .kop-switch input:checked + .kop-slider { background: #2563eb; }
+        .kop-switch input:checked + .kop-slider::before { transform: translateX(18px); }
+
+        /* ── Section label ── */
+        .kop-sec {
+          display: flex; align-items: center; gap: 8px; margin-bottom: 11px;
+        }
+        .kop-sec-label {
+          font-size: 9.5px; font-weight: 800; letter-spacing: .12em;
+          text-transform: uppercase; color: #94a3b8; white-space: nowrap;
+        }
+        .kop-sec::after {
+          content: ''; flex: 1; height: 1px;
+          background: linear-gradient(90deg, #e2e8f0, transparent);
+        }
+
+        /* ── Module Grid ── */
+        .kop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+
+        /* ── Module Tile ── */
+        .kop-tile {
+          display: flex; flex-direction: column; align-items: center; gap: 7px;
+          padding: 15px 8px 12px;
+          background: #fff;
+          border-radius: 17px;
+          border: 1.5px solid #eaeef5;
+          text-decoration: none;
+          transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+          box-shadow: 0 1px 5px rgba(15,45,107,.06);
+          position: relative; overflow: hidden; cursor: pointer;
+        }
+        .kop-tile::before {
+          content: '';
+          position: absolute; top: 0; left: 0; right: 0;
+          height: 3px; opacity: 0;
+          transition: opacity .22s;
+          background: linear-gradient(90deg, #2563eb, #6366f1);
+        }
+        .kop-tile:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 14px 36px rgba(15,45,107,.15);
+          border-color: #bfdbfe;
+        }
+        .kop-tile:hover::before { opacity: 1; }
+        .kop-tile:active { transform: translateY(-2px); }
+
+        .kop-tile.is-off {
+          opacity: .45; cursor: not-allowed;
+          pointer-events: none; background: #fafafa;
+        }
+        .kop-tile.is-off::before { display: none; }
+
+        .kop-tile-icon {
+          width: 50px; height: 50px; border-radius: 15px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 23px;
+          transition: transform .22s ease;
+        }
+        .kop-tile:hover .kop-tile-icon { transform: scale(1.12) rotate(-5deg); }
+
+        .kop-tile-label {
+          font-size: 11px; font-weight: 700; color: #334155;
+          text-align: center; line-height: 1.2; letter-spacing: -.01em;
+        }
+
+        .kop-tile-desc {
+          font-size: 9px; font-weight: 500; color: #94a3b8;
+          text-align: center; line-height: 1.3; letter-spacing: -.01em;
+        }
+
+        .kop-soon-pill {
+          position: absolute; top: 8px; right: 8px;
+          font-size: 7px; font-weight: 800; letter-spacing: .06em;
+          text-transform: uppercase;
+          background: #fef9c3; color: #92400e;
+          border: 1px solid #fde68a;
+          padding: 2px 6px; border-radius: 6px; line-height: 1.5;
+        }
+
+        /* ── Spinner ── */
+        .kop-spin {
+          width: 18px; height: 18px;
+          border: 2px solid rgba(255,255,255,.3);
+          border-top-color: white; border-radius: 50%;
+          animation: kop-spin .7s linear infinite;
+        }
         @keyframes kop-spin { to { transform: rotate(360deg); } }
+
+        /* ── Online Ping ── */
+        .kop-ping-wrap { position: relative; width: 8px; height: 8px; flex-shrink: 0; }
+        .kop-ping {
+          position: absolute; inset: 0; border-radius: 50%;
+          background: #22c55e; opacity: .4;
+          animation: kop-ping 2s ease-out infinite;
+        }
+        .kop-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; position: relative; z-index: 1; }
+        @keyframes kop-ping {
+          0%   { transform: scale(1);   opacity: .4; }
+          70%  { transform: scale(2.4); opacity: 0;  }
+          100% { opacity: 0; }
+        }
+
+        /* ── Logout Modal ── */
+        .kop-modal-overlay {
+          position: fixed; inset: 0; z-index: 100;
+          background: rgba(10,20,50,.55);
+          backdrop-filter: blur(6px);
+          display: flex; align-items: flex-end; justify-content: center;
+          padding: 0 12px 24px;
+          animation: kop-fade-in .2s ease;
+        }
+        .kop-modal {
+          width: 100%; max-width: 420px;
+          background: #fff; border-radius: 24px;
+          padding: 28px 24px 20px;
+          box-shadow: 0 30px 80px rgba(0,0,0,.3);
+          animation: kop-slide-up .25s cubic-bezier(.34,1.28,.64,1);
+        }
+        @keyframes kop-fade-in  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes kop-slide-up { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .kop-modal-btn {
+          flex: 1; padding: 13px; border-radius: 13px;
+          font-size: 13px; font-weight: 700; font-family: inherit;
+          cursor: pointer; border: none; transition: transform .15s, box-shadow .15s;
+        }
+        .kop-modal-btn:active { transform: scale(.97); }
+        .kop-modal-cancel { background: #f1f5f9; color: #475569; }
+        .kop-modal-cancel:hover { background: #e2e8f0; }
+        .kop-modal-confirm {
+          background: linear-gradient(135deg, #dc2626, #b91c1c);
+          color: #fff;
+          box-shadow: 0 4px 14px rgba(220,38,38,.35);
+        }
+        .kop-modal-confirm:hover { box-shadow: 0 8px 22px rgba(220,38,38,.45); }
+
+        /* ── Responsive ── */
+        @media (max-width: 360px) {
+          .kop-tile       { padding: 12px 5px 10px; }
+          .kop-tile-icon  { width: 42px; height: 42px; font-size: 20px; }
+          .kop-tile-desc  { display: none; }
+          .kop-grid       { gap: 7px; }
+          .kop-header     { padding: 44px 16px 80px; }
+        }
+        @media (min-width: 640px) {
+          .kop-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        }
       `}} />
 
-      <main className="kop-shell min-h-screen bg-slate-100 flex justify-center">
-        <div className="w-full max-w-md bg-slate-100 min-h-screen relative sm:shadow-2xl sm:border-x sm:border-slate-200 overflow-hidden">
-
-          {/* ── HEADER ── */}
-          <div className="kop-header">
-            <div className="flex justify-between items-center relative z-10">
-              <div>
-                <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginBottom: 4 }}>
-                  Koperasi Jasa Karyawan PT Elsewedy Electric Indonesia
-                </p>
-                <h1 style={{ fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: '-.02em' }}>
-                  Dashboard
-                </h1>
+      {/* ══════════════════════════════════════
+          LOGOUT CONFIRMATION MODAL
+      ══════════════════════════════════════ */}
+      {logoutModal && (
+        <div
+          className="kop-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="logout-modal-title"
+          onClick={(e) => { if (e.target === e.currentTarget) setLogoutModal(false); }}
+        >
+          <div className="kop-modal">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+                background: '#fff1f2', border: '1px solid #fecaca',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                  stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
               </div>
-
-              <button onClick={handleLogout} disabled={loggingOut} className="kop-logout-btn" aria-label="Logout">
-                {loggingOut ? (
-                  <div className="kop-spin" />
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-                  </svg>
-                )}
+              <div>
+                <h3 id="logout-modal-title" style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: '0 0 4px', letterSpacing: '-.02em' }}>
+                  Keluar dari Sistem?
+                </h3>
+                <p style={{ fontSize: 12, color: '#64748b', margin: 0, lineHeight: 1.5 }}>
+                  Sesi Anda akan diakhiri. Pastikan semua pekerjaan sudah tersimpan.
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="kop-modal-btn kop-modal-cancel" onClick={() => setLogoutModal(false)}>
+                Batal
+              </button>
+              <button className="kop-modal-btn kop-modal-confirm" onClick={handleLogout}>
+                Ya, Keluar
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════
+          MAIN SHELL
+      ══════════════════════════════════════ */}
+      <main className="kop-shell min-h-screen bg-slate-100 flex justify-center">
+        <div className="kop-page w-full max-w-md bg-slate-100 min-h-screen relative sm:shadow-2xl sm:border-x sm:border-slate-200 overflow-y-auto">
+
+          {/* ── HEADER ── */}
+          <header className="kop-header">
+            {/* Ambient orbs */}
+            <div className="kop-orb" aria-hidden="true" style={{ width: 280, height: 280, top: -110, right: -90,  background: 'radial-gradient(circle, rgba(255,255,255,.1) 0%, transparent 70%)' }} />
+            <div className="kop-orb" aria-hidden="true" style={{ width: 200, height: 200, bottom: -20, left: -60,  background: 'radial-gradient(circle, rgba(96,165,250,.22) 0%, transparent 70%)' }} />
+            <div className="kop-orb" aria-hidden="true" style={{ width: 120, height: 120, top: '40%', right: '20%', background: 'radial-gradient(circle, rgba(99,102,241,.2) 0%, transparent 70%)' }} />
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', zIndex: 2 }}>
+              <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+                {/* Breadcrumb */}
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 10, background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 20, padding: '3px 10px' }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9,22 9,12 15,12 15,22"/>
+                  </svg>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.6)' }}>
+                    KJK PT Elsewedy Electric
+                  </span>
+                </div>
+
+                <h1 style={{ fontSize: 23, fontWeight: 900, color: '#fff', letterSpacing: '-.03em', margin: '0 0 7px', lineHeight: 1 }}>
+                  Dashboard
+                </h1>
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', fontWeight: 500, margin: 0 }}>
+                  {greeting.text},{' '}
+                  <strong style={{ color: '#fff', fontWeight: 800 }}>
+                    {user.nama.split(' ').slice(0, 2).join(' ')}
+                  </strong>{' '}
+                  {greeting.emoji}
+                </p>
+              </div>
+
+              {/* Logout trigger */}
+              <button
+                onClick={() => setLogoutModal(true)}
+                disabled={loggingOut}
+                className="kop-logout-btn"
+                aria-label="Keluar dari sistem"
+                title="Logout"
+              >
+                {loggingOut
+                  ? <div className="kop-spin" aria-hidden="true" />
+                  : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                      stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                      <polyline points="16 17 21 12 16 7"/>
+                      <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                  )}
+              </button>
+            </div>
+          </header>
 
           {/* ── BODY ── */}
-          <div style={{ padding: '0 16px 32px', marginTop: -60, position: 'relative', zIndex: 5 }}>
+          <div style={{ padding: '0 14px 40px', marginTop: -60, position: 'relative', zIndex: 5 }}>
 
             {/* ── PROFILE CARD ── */}
-            <div className="kop-card" style={{ padding: 20, marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-                <div style={{ width: 52, height: 52, borderRadius: 16, background: 'linear-gradient(135deg,#dbeafe,#eff6ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #dbeafe', flexShrink: 0 }}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1a4db3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            <div className="kop-card" style={{ padding: 18, marginBottom: 14 }}>
+
+              {/* User info row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: isPengurus ? 14 : 0 }}>
+                <div className="kop-avatar" aria-hidden="true">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="#1a4db3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
                   </svg>
                 </div>
 
-                <div>
-                  <p style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, marginBottom: 2 }}>Selamat datang,</p>
-                  <h2 style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', letterSpacing: '-.02em', lineHeight: 1.2 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 500, margin: '0 0 3px' }}>
+                    Selamat datang kembali,
+                  </p>
+                  <h2 style={{
+                    fontSize: 16, fontWeight: 800, color: '#0f172a',
+                    letterSpacing: '-.025em', lineHeight: 1.2, margin: '0 0 7px',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
                     {user.nama}
                   </h2>
-                  <span style={{ display: 'inline-block', marginTop: 5, background: '#eff6ff', color: '#1a4db3', border: '1px solid #dbeafe', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '3px 8px', borderRadius: 20 }}>
-                    {roleLabels[user.role]}
-                  </span>
-                </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div style={{ background: '#f1f5f9', borderRadius: 14, padding: '12px 14px', border: '1px solid #e2e8f0' }}>
-                  <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94a3b8', marginBottom: 5 }}>NIK Karyawan</p>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{user.nik}</p>
-                </div>
-                <div style={{ background: '#f1f5f9', borderRadius: 14, padding: '12px 14px', border: '1px solid #e2e8f0' }}>
-                  <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#94a3b8', marginBottom: 5 }}>Status Akun</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 0 3px #ecfdf5' }} />
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#10b981' }}>Aktif</span>
+                  {/* Role + mode badges */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
+                    {/* Role dot */}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5,
+                      background: rc.bg, border: `1px solid ${rc.border}`, color: rc.color,
+                      fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase',
+                      padding: '3px 9px', borderRadius: 20,
+                    }}>
+                      <div style={{ width: 5, height: 5, borderRadius: '50%', background: rc.dot, flexShrink: 0 }} />
+                      {roleLabels[user.role]}
+                    </div>
+
+                    {isMemberMode && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac',
+                        fontSize: 9, fontWeight: 700, letterSpacing: '.07em', textTransform: 'uppercase',
+                        padding: '3px 8px', borderRadius: 20,
+                      }}>
+                        ✓ Mode Anggota
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
+
+              {/* ── MEMBER MODE TOGGLE (Pengurus only) ── */}
+              {isPengurus && (
+                <>
+                  <div style={{ height: 1, background: 'linear-gradient(90deg, #e2e8f0, transparent)', margin: '0 0 12px' }} />
+                  <label className="kop-toggle-row" htmlFor="member-mode-toggle">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }} aria-hidden="true">
+                        {isMemberMode ? '👤' : '🛡️'}
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', margin: '0 0 2px', letterSpacing: '-.01em' }}>
+                          Mode Tampilan Anggota
+                        </p>
+                        <p style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {isMemberMode
+                            ? 'Aktif — menu pengurus disembunyikan'
+                            : 'Nonaktif — semua menu tersedia'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="kop-switch">
+                      <input
+                        id="member-mode-toggle"
+                        type="checkbox"
+                        checked={isMemberMode}
+                        onChange={toggleMode}
+                        aria-label="Aktifkan mode tampilan anggota"
+                      />
+                      <span className="kop-slider" />
+                    </div>
+                  </label>
+                </>
+              )}
             </div>
 
-            {/* ── TOMBOL SWITCH MODE ── */}
-            {isPengurus && (
-              <div className="kop-card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isMemberMode ? '#f0fdf4' : '#fff', border: isMemberMode ? '1px solid #bbf7d0' : '1px solid #e2e8f0', transition: 'all 0.3s' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: isMemberMode ? '#dcfce7' : '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isMemberMode ? '#16a34a' : '#2563eb' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      {isMemberMode ? (
-                        <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>
-                      ) : (
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                      )}
-                    </svg>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: isMemberMode ? '#166534' : '#0f172a', marginBottom: 2 }}>
-                      {isMemberMode ? 'Mode Anggota' : 'Mode Pengurus'}
-                    </p>
-                    <p style={{ fontSize: 10, color: isMemberMode ? '#15803d' : '#64748b', margin: 0 }}>
-                      {isMemberMode ? 'Menampilkan menu pribadi' : 'Akses menu administratif'}
-                    </p>
-                  </div>
+            {/* ── ACTIVE MODULES ── */}
+            {activeModules.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div className="kop-sec">
+                  <span className="kop-sec-label">Menu Utama</span>
                 </div>
-
-                <button
-                  onClick={toggleMode}
-                  style={{ background: isMemberMode ? '#16a34a' : '#2563eb', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', boxShadow: isMemberMode ? '0 2px 8px rgba(22,163,74,0.2)' : '0 2px 8px rgba(37,99,235,0.2)' }}
-                >
-                  {isMemberMode ? 'Kembali' : 'Ganti Mode'}
-                </button>
+                <div className="kop-grid">
+                  {activeModules.map(mod => (
+                    <Link
+                      key={mod.label}
+                      href={mod.href}
+                      className="kop-tile"
+                      aria-label={`${mod.label} — ${mod.desc}`}
+                    >
+                      <div className="kop-tile-icon" style={{ background: mod.bg }}>
+                        {mod.icon}
+                      </div>
+                      <span className="kop-tile-label">{mod.label}</span>
+                      <span className="kop-tile-desc">{mod.desc}</span>
+                    </Link>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* ── MENU UTAMA ── */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px', marginBottom: 12 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', letterSpacing: '-.01em', margin: 0 }}>Menu Utama</h3>
-            </div>
-
-            <div className="kop-card" style={{ padding: '20px 16px', marginBottom: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px 4px' }}>
-                {allowedModules.map((item, idx) => {
-                  if (item.isActive) {
-                    
-                    let targetHref = item.href;
-                    if (isPengurus && isMemberMode) {
-                      if (item.label === "Simpanan") targetHref = `/dashboard/simpanan?view=personal`;
-                      if (item.label === "Pinjaman") targetHref = `/dashboard/pinjaman?view=personal`;
-                    }
-
-                    return (
-                      <Link key={idx} href={targetHref} className="kop-menu-link" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textDecoration: 'none' }}>
-                        <div className="kop-menu-icon" style={{ background: item.bg }}>
-                          {item.icon}
-                        </div>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: '#475569', textAlign: 'center', lineHeight: 1.3 }}>
-                          {item.label}
-                        </span>
-                      </Link>
-                    );
-                  }
-                  return (
-                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
-                      <div className="kop-menu-icon" style={{ background: '#f1f5f9', opacity: .45, filter: 'grayscale(1)', position: 'relative' }}>
-                        {item.icon}
-                        <span style={{ position: 'absolute', top: -5, right: -5, background: '#94a3b8', color: '#fff', fontSize: 7, fontWeight: 800, letterSpacing: '.05em', padding: '2px 5px', borderRadius: 8, textTransform: 'uppercase' }}>
-                          Soon
-                        </span>
+            {/* ── COMING SOON MODULES ── */}
+            {comingSoon.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div className="kop-sec">
+                  <span className="kop-sec-label">Segera Hadir</span>
+                </div>
+                <div className="kop-grid">
+                  {comingSoon.map(mod => (
+                    <div
+                      key={mod.label}
+                      className="kop-tile is-off"
+                      role="button"
+                      aria-disabled="true"
+                      aria-label={`${mod.label} — belum tersedia`}
+                      tabIndex={-1}
+                    >
+                      <span className="kop-soon-pill" aria-hidden="true">Segera</span>
+                      <div className="kop-tile-icon" style={{ background: mod.bg }}>
+                        {mod.icon}
                       </div>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textAlign: 'center', lineHeight: 1.3 }}>
-                        {item.label}
-                      </span>
+                      <span className="kop-tile-label">{mod.label}</span>
+                      <span className="kop-tile-desc">{mod.desc}</span>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* ── FOOTER ── */}
-            <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 20, padding: '5px 12px', marginBottom: 12 }}>
-                <div style={{ position: 'relative', width: 8, height: 8 }}>
-                  <div className="kop-ping-ring" />
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563eb', position: 'relative', zIndex: 1 }} />
+            <div style={{ borderTop: '1px solid #e8edf5', paddingTop: 20, textAlign: 'center' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 10,
+                background: '#f8fafc', border: '1px solid #e2e8f0',
+                borderRadius: 20, padding: '5px 12px',
+              }}>
+                <div className="kop-ping-wrap" aria-hidden="true">
+                  <div className="kop-ping" />
+                  <div className="kop-dot" />
                 </div>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#1a4db3', letterSpacing: '.1em', textTransform: 'uppercase' }}>
-                  Sistem Terhubung
+                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#94a3b8' }}>
+                  System Online · PWA v1.0 · Secured
                 </span>
               </div>
-              <p style={{ fontSize: 10, color: '#94a3b8', lineHeight: 1.6, fontWeight: 500, margin: 0 }}>
-                © {new Date().getFullYear()} Koperasi Jasa Karyawan PT Elsewedy Electric Indonesia<br />
-                Developed by Carlo Tech™
+              <p style={{ fontSize: 10.5, color: '#cbd5e1', fontWeight: 500, margin: 0, lineHeight: 1.7 }}>
+                © {new Date().getFullYear()} Koperasi Jasa Karyawan<br />
+                PT Elsewedy Electric Indonesia
               </p>
             </div>
 
