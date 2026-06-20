@@ -24,6 +24,73 @@ const roleColors: Record<string, React.CSSProperties> = {
   SUPERADMIN: { backgroundColor: "#fff1f2", color: "#be123c", border: "1px solid #fca5a5" },
 };
 
+// CSS diekstrak ke variabel string agar tidak membuat compiler Vercel SWC error
+const pageStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+  *, *::before, *::after { box-sizing: border-box; }
+
+  .kop-shell { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+  
+  /* ── Header ── */
+  .kop-header {
+    background: linear-gradient(150deg, #0a1e4a 0%, #0f2d6b 40%, #1a4db3 75%, #2563eb 100%);
+    padding: 30px 20px 100px;
+    position: relative; overflow: hidden;
+  }
+  .kop-orb { position: absolute; border-radius: 50%; pointer-events: none; }
+
+  /* ── Card Base ── */
+  .kop-card {
+    background: #fff;
+    border-radius: 20px;
+    border: 1px solid #eaeef5;
+    box-shadow: 0 4px 28px rgba(15,45,107,.08), 0 1px 3px rgba(0,0,0,.03);
+    margin-bottom: 16px;
+  }
+
+  .kop-btn-nav {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255, 255, 255, 0.15); color: #fff;
+    padding: 8px 14px; border-radius: 20px;
+    text-decoration: none; font-size: 13px; font-weight: 600;
+    backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2);
+    transition: transform 0.2s, background 0.2s;
+  }
+  .kop-btn-nav:hover { background: rgba(255, 255, 255, 0.25); }
+  .kop-btn-nav:active { transform: scale(0.95); }
+  .kop-btn-nav-light {
+    background: #fff; color: #1a4db3; border: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .kop-btn-nav-light:hover { background: #f8fafc; }
+
+  .data-row:last-child { border-bottom: none !important; }
+
+  .kop-action-btn {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 13px; border-radius: 14px; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+    font-family: inherit;
+  }
+  .kop-action-btn:active { transform: scale(0.97); }
+
+  /* ── RESPONSIVE GRID ── */
+  .kop-content-wrapper { padding: 0 16px 40px; margin-top: -70px; position: relative; z-index: 20; }
+  .kop-grid-responsive { display: flex; flex-direction: column; gap: 16px; }
+  
+  /* Tablet & Desktop Layout */
+  @media (min-width: 768px) {
+    .kop-header { padding: 40px 32px 100px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; }
+    .kop-content-wrapper { padding: 0 32px 40px; margin-top: -70px; }
+    .kop-grid-responsive { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 24px; 
+      align-items: start;
+    }
+  }
+`;
+
 export default async function DetailAnggotaPage({
   params,
   searchParams,
@@ -48,78 +115,14 @@ export default async function DetailAnggotaPage({
   const isSuperAdmin = currentUser.role === "SUPERADMIN";
   const canEdit = ["SUPERADMIN", "SEKRETARIS"].includes(currentUser.role);
 
-  // LOGIKA POTONGAN BARU (Wajib + Sukarela)
   const wajib = Number(anggota.simpanan_wajib_bulanan || anggota.simpanan_bulanan || 0);
   const sukarela = Number(anggota.simpanan_sukarela_bulanan || 0);
   const totalPotongan = wajib + sukarela;
 
   return (
     <main className="kop-shell bg-slate-100 min-h-screen">
-      <style dangerouslySetInnerHTML={{ __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-        *, *::before, *::after { box-sizing: border-box; }
-
-        .kop-shell { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
-        
-        /* ── Header ── */
-        .kop-header {
-          background: linear-gradient(150deg, #0a1e4a 0%, #0f2d6b 40%, #1a4db3 75%, #2563eb 100%);
-          padding: 30px 20px 100px;
-          position: relative; overflow: hidden;
-        }
-        .kop-orb { position: absolute; border-radius: 50%; pointer-events: none; }
-
-        /* ── Card Base ── */
-        .kop-card {
-          background: #fff;
-          border-radius: 20px;
-          border: 1px solid #eaeef5;
-          box-shadow: 0 4px 28px rgba(15,45,107,.08), 0 1px 3px rgba(0,0,0,.03);
-          margin-bottom: 16px;
-        }
-
-        .kop-btn-nav {
-          display: inline-flex; align-items: center; gap: 6px;
-          background: rgba(255, 255, 255, 0.15); color: #fff;
-          padding: 8px 14px; border-radius: 20px;
-          text-decoration: none; font-size: 13px; font-weight: 600;
-          backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2);
-          transition: transform 0.2s, background 0.2s;
-        }
-        .kop-btn-nav:hover { background: rgba(255, 255, 255, 0.25); }
-        .kop-btn-nav:active { transform: scale(0.95); }
-        .kop-btn-nav-light {
-          background: #fff; color: #1a4db3; border: none;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .kop-btn-nav-light:hover { background: #f8fafc; }
-
-        .data-row:last-child { border-bottom: none !important; }
-
-        .kop-action-btn {
-          width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
-          padding: 13px; border-radius: 14px; font-size: 13px; font-weight: 700;
-          cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
-          font-family: inherit;
-        }
-        .kop-action-btn:active { transform: scale(0.97); }
-
-        /* ── RESPONSIVE GRID ── */
-        .kop-content-wrapper { padding: 0 16px 40px; margin-top: -70px; position: relative; z-index: 20; }
-        .kop-grid-responsive { display: flex; flex-direction: column; gap: 16px; }
-        
-        /* Tablet & Desktop Layout */
-        @media (min-width: 768px) {
-          .kop-header { padding: 40px 32px 100px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; }
-          .kop-content-wrapper { padding: 0 32px 40px; margin-top: -70px; }
-          .kop-grid-responsive { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 24px; 
-            align-items: start;
-          }
-        }
-      `}} />
+      {/* CSS di-inject melalui variabel */}
+      <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
 
       <div className="w-full max-w-5xl mx-auto bg-slate-100 min-h-screen relative sm:shadow-xl sm:border-x sm:border-slate-200">
         
