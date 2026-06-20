@@ -55,259 +55,191 @@ export function EditAnggotaForm({ anggota }: { anggota: any }) {
     }, 1500);
   }
 
-  // Tentukan initial value potongan
+  // Default nilai potongan simpanan
   const defaultWajib = anggota.simpanan_wajib_bulanan || anggota.simpanan_bulanan || 0;
   const defaultSukarela = anggota.simpanan_sukarela_bulanan || 0;
 
   return (
     <>
-      {/* --- Scoped Styles untuk Form --- */}
       <style dangerouslySetInnerHTML={{ __html: `
-        .fintech-input, .fintech-select {
-          width: 100%;
-          padding: 12px 16px;
-          border-radius: 8px;
-          border: 1px solid #e2e8f0;
-          font-size: 14px;
-          transition: all 0.2s ease;
-          background-color: #fff;
-          color: #1e293b;
+        .kop-input-wrap { margin-bottom: 20px; }
+        .kop-label {
+          display: block; font-size: 13px; font-weight: 700; color: #1e293b;
+          margin-bottom: 8px; letter-spacing: -.01em;
+        }
+        .kop-req { color: #dc2626; margin-left: 2px; }
+
+        .kop-input, .kop-select {
+          width: 100%; padding: 14px 16px; border-radius: 12px;
+          border: 1.5px solid #e2e8f0; font-size: 14px; font-weight: 500;
+          color: #0f172a; background: #fff; transition: all 0.2s ease;
+          font-family: inherit;
+        }
+        .kop-input::placeholder { color: #94a3b8; font-weight: 400; }
+        .kop-input:focus, .kop-select:focus {
+          outline: none; border-color: #3b82f6;
+          box-shadow: 0 0 0 4px rgba(59,130,246,.15);
         }
 
-        .fintech-input:focus, .fintech-select:focus {
-          outline: none;
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+        .kop-input:disabled, .kop-select:disabled {
+          background: #f8fafc; color: #94a3b8; cursor: not-allowed; border-color: #f1f5f9;
+        }
+        .kop-input[readonly] {
+          background: #f8fafc; color: #64748b; cursor: not-allowed;
+          font-family: monospace; letter-spacing: .05em; font-weight: 700;
         }
 
-        .fintech-input:disabled, .fintech-select:disabled {
-          background-color: #f8fafc;
-          color: #94a3b8;
-          cursor: not-allowed;
+        /* Input dengan Ikon Rp */
+        .kop-input-curr { position: relative; }
+        .kop-input-curr::before {
+          content: 'Rp'; position: absolute; left: 16px; top: 50%;
+          transform: translateY(-50%); font-size: 14px; font-weight: 700;
+          color: #64748b; pointer-events: none;
         }
+        .kop-input-curr .kop-input { padding-left: 42px; font-weight: 700; color: #0f172a; }
 
-        .fintech-input[readonly] {
-          background-color: #f8fafc;
-          color: #94a3b8;
-          cursor: not-allowed;
-          font-family: monospace;
+        .kop-btn-submit {
+          width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+          background: linear-gradient(135deg, #1d4ed8, #1e40af);
+          color: #fff; border: none; padding: 16px; border-radius: 14px;
+          font-size: 14px; font-weight: 700; cursor: pointer;
+          transition: transform 0.15s, box-shadow 0.15s; font-family: inherit;
         }
+        .kop-btn-submit:hover:not(:disabled) {
+          box-shadow: 0 8px 20px rgba(29,78,216,.3); transform: translateY(-2px);
+        }
+        .kop-btn-submit:active:not(:disabled) { transform: scale(0.97); }
+        .kop-btn-submit:disabled { opacity: 0.7; cursor: not-allowed; background: #94a3b8; }
 
-        .fintech-input-highlight {
-          border-color: #60a5fa;
-          background-color: #eff6ff;
+        .kop-alert {
+          border-radius: 12px; padding: 14px 16px; font-size: 13px; font-weight: 600;
+          display: flex; align-items: flex-start; gap: 10px; margin-bottom: 24px; line-height: 1.5;
         }
+        .kop-alert-err { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+        .kop-alert-suc { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
 
-        .fintech-input-highlight:focus {
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37,99,235,.2);
-        }
+        .kop-grid-form { display: grid; grid-template-columns: 1fr; gap: 0 20px; }
+        @media (min-width: 640px) { .kop-grid-form { grid-template-columns: 1fr 1fr; } }
 
-        .fintech-btn-primary {
-          background-color: #2563eb;
-          color: #fff;
-          transition: all 0.2s ease;
+        .kop-spin {
+          width: 20px; height: 20px; border: 2.5px solid rgba(255,255,255,.3);
+          border-top-color: white; border-radius: 50%; animation: kop-spin .7s linear infinite;
         }
-        
-        .fintech-btn-primary:hover:not(:disabled) {
-          background-color: #1d4ed8;
-          box-shadow: 0 4px 12px rgba(37,99,235,.2);
-        }
-
-        .fintech-btn-primary:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-        }
-
-        .fintech-btn-secondary {
-          background-color: #f1f5f9;
-          color: #334155;
-          transition: all 0.2s ease;
-        }
-
-        .fintech-btn-secondary:hover:not(:disabled) {
-          background-color: #e2e8f0;
-        }
-
-        .fintech-btn-secondary:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        .spinner-icon {
-          display: inline-block;
-          width: 16px;
-          height: 16px;
-          border: 2px solid rgba(255,255,255,0.3);
-          border-top-color: #fff;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
+        @keyframes kop-spin { to { transform: rotate(360deg); } }
       `}} />
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      <form onSubmit={handleSubmit}>
         
         {/* Error Alert */}
         {error && (
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: "12px 16px", borderRadius: "8px", display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "14px", fontWeight: "500" }}>
-            <svg style={{ flexShrink: 0, marginTop: "2px" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div className="kop-alert kop-alert-err" role="alert">
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }} viewBox="0 0 24 24">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
             <span>{error}</span>
           </div>
         )}
 
         {/* Success Alert */}
         {success && (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", padding: "12px 16px", borderRadius: "8px", display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "14px", fontWeight: "500" }}>
-            <svg style={{ flexShrink: 0, marginTop: "2px" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div className="kop-alert kop-alert-suc" role="alert">
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }} viewBox="0 0 24 24">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
             <span>{success}</span>
           </div>
         )}
 
-        {/* ── SECTION: Data Utama ── */}
-        <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-          <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-            Data Utama
-          </h3>
-
-          {/* NIK - Read Only */}
-          <div>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-              NIK
-            </label>
-            <input name="nik" type="text" value={anggota.nik} readOnly className="fintech-input" />
-            <p style={{ margin: "6px 0 0 0", fontSize: "12px", color: "#94a3b8", display: "flex", alignItems: "center", gap: "4px" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              NIK tidak dapat diubah
+        <div className="kop-grid-form">
+          {/* ── NIK ── */}
+          <div className="kop-input-wrap">
+            <label className="kop-label" htmlFor="nik">Nomor Induk Karyawan (NIK)</label>
+            <input name="nik" id="nik" type="text" readOnly value={anggota.nik} className="kop-input" aria-describedby="nik-desc" />
+            <p id="nik-desc" style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+              Terkunci oleh sistem
             </p>
           </div>
 
-          {/* Nama */}
-          <div>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-              Nama Lengkap <span style={{ color: "#ef4444" }}>*</span>
-            </label>
-            <input name="nama" type="text" defaultValue={anggota.nama} required disabled={loading} className="fintech-input" />
+          {/* ── Nama ── */}
+          <div className="kop-input-wrap">
+            <label className="kop-label" htmlFor="nama">Nama Lengkap <span className="kop-req">*</span></label>
+            <input name="nama" id="nama" type="text" defaultValue={anggota.nama} required disabled={loading} className="kop-input" />
           </div>
 
-          {/* Email */}
-          <div>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-              Email (Gmail)
-            </label>
-            <input name="email" type="email" defaultValue={anggota.email?.includes("@koperasi.local") ? "" : anggota.email} placeholder="contoh@gmail.com" disabled={loading} className="fintech-input" />
+          {/* ── Email ── */}
+          <div className="kop-input-wrap">
+            <label className="kop-label" htmlFor="email">Email</label>
+            <input name="email" id="email" type="email" defaultValue={anggota.email?.includes("@koperasi.local") ? "" : anggota.email} placeholder="email@contoh.com" disabled={loading} className="kop-input" />
           </div>
 
-          {/* No HP */}
-          <div>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-              No. HP
-            </label>
-            <input name="no_hp" type="tel" defaultValue={anggota.no_hp || ""} placeholder="08xxxxxxxxxx" disabled={loading} className="fintech-input" />
+          {/* ── No HP ── */}
+          <div className="kop-input-wrap">
+            <label className="kop-label" htmlFor="no_hp">Nomor HP / WhatsApp</label>
+            <input name="no_hp" id="no_hp" type="tel" defaultValue={anggota.no_hp || ""} placeholder="08xxxxxxxxxx" disabled={loading} className="kop-input" />
           </div>
         </div>
 
-        {/* ── SECTION: Data Bank ── */}
-        <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-          <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>
-            Data Rekening Bank
-          </h3>
+        <div style={{ height: 1, background: '#f1f5f9', margin: '8px 0 24px' }} />
 
-          <div>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-              No. Rekening
-            </label>
-            <input name="no_rekening" type="text" inputMode="numeric" defaultValue={anggota.no_rekening || ""} placeholder="Nomor rekening bank" disabled={loading} className="fintech-input" />
-          </div>
-
-          <div>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-              Nama Bank
-            </label>
-            <select name="nama_bank" disabled={loading} value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)} className="fintech-select" style={{ WebkitAppearance: "none", MozAppearance: "none", appearance: "none", backgroundImage: "url(\"data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 16px top 50%", backgroundSize: "10px auto" }}>
-              <option value="">-- Pilih bank --</option>
-              {BANK_OPTIONS.map((bank) => (
-                <option key={bank} value={bank}>{bank}</option>
-              ))}
+        {/* ── DATA REKENING BANK ── */}
+        <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Data Rekening Pencairan</h3>
+        <div className="kop-grid-form">
+          <div className="kop-input-wrap">
+            <label className="kop-label" htmlFor="bank">Nama Bank</label>
+            <select id="bank" name="nama_bank" className="kop-select" value={selectedBank} disabled={loading} onChange={(e) => setSelectedBank(e.target.value)}>
+              <option value="">-- Pilih Bank --</option>
+              {BANK_OPTIONS.map((bank) => ( <option key={bank} value={bank}>{bank}</option> ))}
             </select>
           </div>
 
           {selectedBank === "Lainnya" && (
-            <div>
-              <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-                Nama Bank (Lainnya) <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <input name="nama_bank_custom" type="text" defaultValue={!KNOWN_BANKS.includes(anggota.nama_bank) ? anggota.nama_bank : ""} placeholder="Tuliskan nama bank Anda" required disabled={loading} autoFocus className="fintech-input fintech-input-highlight" />
+            <div className="kop-input-wrap">
+              <label className="kop-label" htmlFor="bank_lain">Ketik Nama Bank</label>
+              <input id="bank_lain" name="nama_bank_lainnya" type="text" defaultValue={anggota.nama_bank_lainnya || ""} disabled={loading} className="kop-input" placeholder="Misal: Bank Jago" />
             </div>
           )}
-        </div>
 
-        {/* ── SECTION: Pengaturan Akun & Potongan Payroll ── */}
-        <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-          <h3 style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            Pengaturan Akun & Payroll
-          </h3>
-
-          <div>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-              Role <span style={{ color: "#ef4444" }}>*</span>
-            </label>
-            <select name="role" required disabled={loading} defaultValue={anggota.role} className="fintech-select" style={{ WebkitAppearance: "none", MozAppearance: "none", appearance: "none", backgroundImage: "url(\"data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 16px top 50%", backgroundSize: "10px auto" }}>
-              <option value="ANGGOTA">Anggota</option>
-              <option value="SEKRETARIS">Sekretaris</option>
-              <option value="BENDAHARA">Bendahara</option>
-              <option value="KETUA">Ketua</option>
-              <option value="SUPERADMIN">Super Admin</option>
-            </select>
+          <div className="kop-input-wrap">
+            <label className="kop-label" htmlFor="no_rek">Nomor Rekening</label>
+            <input id="no_rek" name="no_rekening" type="text" defaultValue={anggota.no_rekening || ""} disabled={loading} className="kop-input" placeholder="Masukkan angka saja" />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-                Simpanan Wajib / Bulan
-              </label>
-              <div style={{ position: "relative" }}>
-                <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b", fontSize: "14px", fontWeight: "600" }}>Rp</span>
-                <input name="simpanan_wajib_bulanan" type="number" min="0" step="10000" defaultValue={defaultWajib} disabled={loading} className="fintech-input" style={{ paddingLeft: "40px" }} />
-              </div>
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px" }}>
-                Simpanan Sukarela / Bulan
-              </label>
-              <div style={{ position: "relative" }}>
-                <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b", fontSize: "14px", fontWeight: "600" }}>Rp</span>
-                <input name="simpanan_sukarela_bulanan" type="number" min="0" step="10000" defaultValue={defaultSukarela} disabled={loading} className="fintech-input" style={{ paddingLeft: "40px" }} />
-              </div>
-            </div>
-          </div>
-          <p style={{ margin: "-6px 0 0 0", fontSize: "12px", color: "#94a3b8" }}>
-            Total kedua nominal ini akan ditarik secara otomatis saat proses Setoran Massal (Payroll).
-          </p>
-
-          <div>
-            <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "6px", marginTop: "8px" }}>
-              Tanggal Bergabung
-            </label>
-            <input name="tanggal_bergabung" type="date" defaultValue={anggota.tanggal_bergabung ? new Date(anggota.tanggal_bergabung).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]} disabled={loading} className="fintech-input" />
+          <div className="kop-input-wrap">
+            <label className="kop-label" htmlFor="atas_nama">Atas Nama Rekening</label>
+            <input id="atas_nama" name="nama_rekening" type="text" defaultValue={anggota.nama_rekening || ""} disabled={loading} className="kop-input" placeholder="Sesuai buku tabungan" />
           </div>
         </div>
 
-        {/* Submit Buttons */}
-        <div style={{ display: "flex", gap: "12px", paddingTop: "8px" }}>
-          <button type="button" onClick={() => router.back()} disabled={loading} className="fintech-btn-secondary" style={{ flex: "1", border: "none", padding: "14px", borderRadius: "8px", fontSize: "14px", fontWeight: "600", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-            Batal
-          </button>
-          <button type="submit" disabled={loading} className="fintech-btn-primary" style={{ flex: "2", border: "none", padding: "14px", borderRadius: "8px", fontSize: "14px", fontWeight: "600", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-            {loading ? "Menyimpan..." : "Simpan Perubahan"}
+        <div style={{ height: 1, background: '#f1f5f9', margin: '8px 0 24px' }} />
+
+        {/* ── SIMPANAN BULANAN ── */}
+        <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Potongan Simpanan / Bulan</h3>
+        <div className="kop-grid-form">
+          <div className="kop-input-wrap kop-input-curr">
+            <label className="kop-label" htmlFor="simpanan_wajib">Simpanan Wajib</label>
+            <input id="simpanan_wajib" name="simpanan_wajib_bulanan" type="number" min={0} defaultValue={defaultWajib} disabled={loading} className="kop-input" />
+          </div>
+
+          <div className="kop-input-wrap kop-input-curr">
+            <label className="kop-label" htmlFor="simpanan_sukarela">Simpanan Sukarela</label>
+            <input id="simpanan_sukarela" name="simpanan_sukarela_bulanan" type="number" min={0} defaultValue={defaultSukarela} disabled={loading} className="kop-input" />
+          </div>
+        </div>
+
+        {/* Submit Button */}
+        <div style={{ marginTop: 12 }}>
+          <button type="submit" disabled={loading} className="kop-btn-submit" aria-busy={loading}>
+            {loading ? ( <span className="kop-spin" aria-hidden="true" /> ) : (
+              <>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Simpan Perubahan Data
+              </>
+            )}
           </button>
         </div>
+
       </form>
     </>
   );
