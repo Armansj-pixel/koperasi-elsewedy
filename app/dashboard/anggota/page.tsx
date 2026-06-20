@@ -18,16 +18,32 @@ const roleColors: Record<string, string> = {
   SUPERADMIN: "bg-red-100 text-red-700",
 };
 
+function getGreeting(): { text: string; emoji: string } {
+  const hour = new Date().getUTCHours() + 7; // Adjust UTC to WIB (GMT+7)
+  if (hour >= 5 && hour < 12) return { text: "Selamat Pagi", emoji: "🌤️" };
+  if (hour >= 12 && hour < 15) return { text: "Selamat Siang", emoji: "☀️" };
+  if (hour >= 15 && hour < 18) return { text: "Selamat Sore", emoji: "🌆" };
+  return { text: "Selamat Malam", emoji: "🌙" };
+}
+
 export default async function AnggotaPage({
   searchParams,
 }: {
   searchParams: { search?: string };
 }) {
-  const currentUser = await requireRole(["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"]);
+  const currentUser = await requireRole([
+    "SUPERADMIN",
+    "SEKRETARIS",
+    "BENDAHARA",
+    "KETUA",
+  ]);
   const search = searchParams.search || "";
   const { data: anggotaList } = await getAnggotaList(search);
+
   const totalAktif = anggotaList.filter((a: any) => a.is_active).length;
   const totalNonaktif = anggotaList.filter((a: any) => !a.is_active).length;
+
+  const greeting = getGreeting();
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -42,7 +58,9 @@ export default async function AnggotaPage({
               ← Dashboard
             </Link>
             <span className="text-slate-300">|</span>
-            <h1 className="font-bold text-slate-800">👥 Manajemen Anggota</h1>
+            <h1 className="font-bold text-slate-800">
+              👥 Manajemen Anggota
+            </h1>
           </div>
           {["SUPERADMIN", "SEKRETARIS"].includes(currentUser.role) && (
             <Link
@@ -57,26 +75,47 @@ export default async function AnggotaPage({
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Greeting */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-slate-700">
+            {greeting.text}, {currentUser.nama} {greeting.emoji}
+          </h2>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-            <div className="text-3xl font-bold text-blue-600">{anggotaList.length}</div>
-            <div className="text-xs text-slate-500 mt-1 font-semibold uppercase">Total Anggota</div>
+            <div className="text-3xl font-bold text-blue-600">
+              {anggotaList.length}
+            </div>
+            <div className="text-xs text-slate-500 mt-1 font-semibold uppercase">
+              Total Anggota
+            </div>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-            <div className="text-3xl font-bold text-green-600">{totalAktif}</div>
-            <div className="text-xs text-slate-500 mt-1 font-semibold uppercase">Aktif</div>
+            <div className="text-3xl font-bold text-green-600">
+              {totalAktif}
+            </div>
+            <div className="text-xs text-slate-500 mt-1 font-semibold uppercase">
+              Aktif
+            </div>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4 text-center shadow-sm">
-            <div className="text-3xl font-bold text-red-500">{totalNonaktif}</div>
-            <div className="text-xs text-slate-500 mt-1 font-semibold uppercase">Nonaktif</div>
+            <div className="text-3xl font-bold text-red-500">
+              {totalNonaktif}
+            </div>
+            <div className="text-xs text-slate-500 mt-1 font-semibold uppercase">
+              Nonaktif
+            </div>
           </div>
         </div>
 
         {/* Search */}
         <form method="GET" className="mb-4">
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              🔍
+            </span>
             <input
               type="text"
               name="search"
@@ -93,42 +132,66 @@ export default async function AnggotaPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">NIK</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Nama</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">Role</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">Simpanan/Bln</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Status</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Aksi</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600">
+                    NIK
+                  </th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600">
+                    Nama
+                  </th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 hidden md:table-cell">
+                    Role
+                  </th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600">
+                    Status
+                  </th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600">
+                    Aksi
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {anggotaList.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-slate-400">
+                    <td
+                      colSpan={5}
+                      className="text-center py-12 text-slate-400"
+                    >
                       <div className="text-4xl mb-2">👥</div>
                       <div>Belum ada anggota terdaftar</div>
                     </td>
                   </tr>
                 ) : (
                   anggotaList.map((anggota: any) => (
-                    <tr key={anggota.id} className="border-b border-slate-100 hover:bg-slate-50 transition">
+                    <tr
+                      key={anggota.id}
+                      className="border-b border-slate-100 hover:bg-slate-50 transition"
+                    >
                       <td className="px-4 py-3 font-mono font-semibold text-slate-700">
                         {anggota.nik}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-800">{anggota.nama}</div>
-                        <div className="text-xs text-slate-400">{anggota.email}</div>
+                        <div className="font-semibold text-slate-800">
+                          {anggota.nama}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {anggota.email}
+                        </div>
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${roleColors[anggota.role]}`}>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold ${roleColors[anggota.role]}`}
+                        >
                           {roleLabels[anggota.role]}
                         </span>
                       </td>
-                      <td className="px-4 py-3 hidden md:table-cell font-semibold text-slate-700">
-                        Rp {Number(anggota.simpanan_bulanan).toLocaleString("id-ID")}
-                      </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${anggota.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            anggota.is_active
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
+                        >
                           {anggota.is_active ? "✓ Aktif" : "✗ Nonaktif"}
                         </span>
                       </td>
