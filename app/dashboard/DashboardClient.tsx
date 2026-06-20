@@ -401,7 +401,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
                     <polyline points="9,22 9,12 15,12 15,22"/>
                   </svg>
                   <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.6)' }}>
-                    KJK PT Elsewedy Electric
+                    KJK PT Elsewedy Electric Indonesia
                   </span>
                 </div>
 
