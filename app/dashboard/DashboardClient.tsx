@@ -38,15 +38,140 @@ type Module = {
 };
 
 const modules: Module[] = [
-  { icon: "👥", label: "Anggota",    href: "/dashboard/anggota",  isActive: true,  bg: "#dbeafe", iconColor: "#1d4ed8", desc: "Data keanggotaan",   allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS"] },
-  { icon: "💰", label: "Simpanan",   href: "/dashboard/simpanan", isActive: true,  bg: "#d1fae5", iconColor: "#059669", desc: "Kelola tabungan",    allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS","ANGGOTA"] },
-  { icon: "💳", label: "Pinjaman",   href: "/dashboard/pinjaman", isActive: true,  bg: "#fef3c7", iconColor: "#b45309", desc: "Pengajuan kredit",   allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS","ANGGOTA"] },
-  { icon: "👤", label: "Profil",     href: "/dashboard/profil",   isActive: true,  bg: "#f3e8ff", iconColor: "#7e22ce", desc: "Data pribadi",       allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS","ANGGOTA"] },
-  { icon: "✅", label: "Approval",   href: "#",                   isActive: false, bg: "#ede9fe", iconColor: "#6d28d9", desc: "Persetujuan",        allowedRoles: ["SUPERADMIN","KETUA","BENDAHARA","SEKRETARIS"] },
-  { icon: "📊", label: "Laporan HR", href: "/dashboard/laporan",  isActive: true,  bg: "#ffe4e6", iconColor: "#be123c", desc: "Analitik & rekap",   allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS"] },
-  { icon: "📒", label: "Kas Kecil",  href: "#",                   isActive: false, bg: "#ccfbf1", iconColor: "#0f766e", desc: "Arus kas harian",    allowedRoles: ["SUPERADMIN","BENDAHARA"] },
-  { icon: "📰", label: "Berita",     href: "/dashboard/berita",   isActive: true,  bg: "#e0f2fe", iconColor: "#0369a1", desc: "Info & pengumuman",  allowedRoles: ["SUPERADMIN","BENDAHARA","KETUA","SEKRETARIS","ANGGOTA"] },
-  { icon: "📚", label: "Akuntansi",  href: "#",                   isActive: false, bg: "#e0e7ff", iconColor: "#4338ca", desc: "Pembukuan",          allowedRoles: ["SUPERADMIN","BENDAHARA"] },
+  {
+    icon: "👥",
+    label: "Anggota",
+    href: "/dashboard/anggota",
+    isActive: true,
+    bg: "#dbeafe",
+    iconColor: "#1d4ed8",
+    desc: "Data keanggotaan",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"],
+  },
+  {
+    icon: "💰",
+    label: "Simpanan",
+    href: "/dashboard/simpanan",
+    isActive: true,
+    bg: "#d1fae5",
+    iconColor: "#059669",
+    desc: "Kelola tabungan",
+    allowedRoles: [
+      "SUPERADMIN",
+      "BENDAHARA",
+      "KETUA",
+      "SEKRETARIS",
+      "ANGGOTA",
+    ],
+  },
+  {
+    icon: "💳",
+    label: "Pinjaman",
+    href: "/dashboard/pinjaman",
+    isActive: true,
+    bg: "#fef3c7",
+    iconColor: "#b45309",
+    desc: "Pengajuan kredit",
+    allowedRoles: [
+      "SUPERADMIN",
+      "BENDAHARA",
+      "KETUA",
+      "SEKRETARIS",
+      "ANGGOTA",
+    ],
+  },
+  {
+    icon: "👤",
+    label: "Profil",
+    href: "/dashboard/profil",
+    isActive: true,
+    bg: "#f3e8ff",
+    iconColor: "#7e22ce",
+    desc: "Data pribadi",
+    allowedRoles: [
+      "SUPERADMIN",
+      "BENDAHARA",
+      "KETUA",
+      "SEKRETARIS",
+      "ANGGOTA",
+    ],
+  },
+  {
+    icon: "✅",
+    label: "Approval",
+    href: "#",
+    isActive: false,
+    bg: "#ede9fe",
+    iconColor: "#6d28d9",
+    desc: "Persetujuan",
+    allowedRoles: [
+      "SUPERADMIN",
+      "KETUA",
+      "BENDAHARA",
+      "SEKRETARIS",
+    ],
+  },
+  {
+    icon: "📊",
+    label: "Laporan HR",
+    href: "/dashboard/laporan",
+    isActive: true,
+    bg: "#ffe4e6",
+    iconColor: "#be123c",
+    desc: "Analitik & rekap",
+    allowedRoles: [
+      "SUPERADMIN",
+      "BENDAHARA",
+      "KETUA",
+      "SEKRETARIS",
+    ],
+  },
+  {
+    icon: "📒",
+    label: "Kas Kecil",
+    href: "#",
+    isActive: false,
+    bg: "#ccfbf1",
+    iconColor: "#0f766e",
+    desc: "Arus kas harian",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA"],
+  },
+  {
+    icon: "📰",
+    label: "Berita",
+    href: "/dashboard/berita",
+    isActive: true,
+    bg: "#e0f2fe",
+    iconColor: "#0369a1",
+    desc: "Info & pengumuman",
+    allowedRoles: [
+      "SUPERADMIN",
+      "BENDAHARA",
+      "KETUA",
+      "SEKRETARIS",
+      "ANGGOTA",
+    ],
+  },
+  {
+    icon: "📚",
+    label: "Akuntansi",
+    href: "#",
+    isActive: false,
+    bg: "#e0e7ff",
+    iconColor: "#4338ca",
+    desc: "Pembukuan",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA"],
+  },
+  {
+    icon: "🩺",
+    label: "System Health",
+    href: "/dashboard/superadmin/health",
+    isActive: true,
+    bg: "#fee2e2",
+    iconColor: "#dc2626",
+    desc: "Monitoring sistem",
+    allowedRoles: ["SUPERADMIN"],
+  },
 ];
 
 function getGreeting(): { text: string; emoji: string } {
@@ -82,7 +207,10 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
 
   const isPengurus     = PENGURUS_ROLES.includes(user.role as typeof PENGURUS_ROLES[number]);
   const effectiveRole  = isPengurus && isMemberMode ? "ANGGOTA" : user.role;
+  
+  // Karena System Health sudah di modules, cukup difilter seperti biasa
   const visibleModules = modules.filter(m => m.allowedRoles.includes(effectiveRole));
+
   const activeModules  = visibleModules.filter(m => m.isActive);
   const comingSoon     = visibleModules.filter(m => !m.isActive);
   const rc             = roleColors[user.role];
@@ -380,10 +508,10 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
       )}
 
       {/* ══════════════════════════════════════
-          MAIN SHELL
+          MAIN SHELL (FULL SCREEN NO BEZEL)
       ══════════════════════════════════════ */}
-      <main className="kop-shell min-h-screen bg-slate-100 flex justify-center">
-        <div className="kop-page w-full max-w-md bg-slate-100 min-h-screen relative sm:shadow-2xl sm:border-x sm:border-slate-200 overflow-y-auto">
+      <main className="kop-shell min-h-screen bg-slate-100">
+        <div className="kop-page w-full bg-slate-100 min-h-screen relative overflow-y-auto">
 
           {/* ── HEADER ── */}
           <header className="kop-header">
@@ -397,7 +525,7 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
                 {/* Breadcrumb */}
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 10, background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 20, padding: '3px 10px' }}>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2z"/>
                     <polyline points="9,22 9,12 15,12 15,22"/>
                   </svg>
                   <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,.6)' }}>
@@ -439,8 +567,8 @@ export function DashboardClient({ user }: { user: CurrentUser }) {
             </div>
           </header>
 
-          {/* ── BODY ── */}
-          <div style={{ padding: '0 14px 40px', marginTop: -60, position: 'relative', zIndex: 5 }}>
+          {/* ── BODY (PADDING DIKURANGI AGAR LEBAR KARTU LEBIH MAKSIMAL) ── */}
+          <div style={{ padding: '0 8px 40px', marginTop: -60, position: 'relative', zIndex: 5 }}>
 
             {/* ── PROFILE CARD ── */}
             <div className="kop-card" style={{ padding: 18, marginBottom: 14 }}>
