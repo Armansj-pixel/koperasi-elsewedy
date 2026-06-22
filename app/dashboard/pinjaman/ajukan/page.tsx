@@ -5,26 +5,73 @@ import { createClient } from "@/lib/supabase/server";
 import AjukanPinjamanForm from "./AjukanPinjamanForm";
 import Link from "next/link";
 
+// ── CSS STYLES ──
+const pageStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+  *, *::before, *::after { box-sizing: border-box; }
+
+  .kop-shell { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+  
+  .kop-header {
+    background: linear-gradient(150deg, #0a1e4a 0%, #0f2d6b 40%, #1a4db3 75%, #2563eb 100%);
+    padding: 30px 20px 100px;
+    position: relative; overflow: hidden;
+  }
+  .kop-orb { position: absolute; border-radius: 50%; pointer-events: none; }
+
+  .kop-card {
+    background: #fff;
+    border-radius: 20px;
+    border: 1px solid #eaeef5;
+    box-shadow: 0 4px 28px rgba(15,45,107,.08), 0 1px 3px rgba(0,0,0,.03);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+
+  .kop-btn-nav {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255, 255, 255, 0.15); color: #fff;
+    padding: 8px 14px; border-radius: 20px;
+    text-decoration: none; font-size: 13px; font-weight: 600;
+    backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2);
+    transition: transform 0.2s, background 0.2s;
+  }
+  .kop-btn-nav:hover { background: rgba(255, 255, 255, 0.25); }
+  .kop-btn-nav:active { transform: scale(0.95); }
+
+  .kop-content-wrapper { padding: 0 16px 40px; margin-top: -70px; position: relative; z-index: 20; }
+  
+  @media (min-width: 768px) {
+    .kop-header { padding: 40px 32px 100px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; }
+    .kop-content-wrapper { padding: 0 32px 40px; margin-top: -70px; }
+  }
+`;
+
 export default async function AjukanPinjamanPage({
   searchParams,
 }: {
   searchParams: { error?: string };
 }) {
-  const currentUser = await requireRole(["ANGGOTA"]);
+  // Izinkan pengurus masuk agar bisa melakukan "Urgency Override"
+  const currentUser = await requireRole(["ANGGOTA", "BENDAHARA", "SUPERADMIN"]);
   const supabase = await createClient();
+
+  // Cek apakah user yang login memiliki otoritas override
+  const canOverride = ["BENDAHARA", "SUPERADMIN"].includes(currentUser.role);
 
   const pinjamanAktif = await getPinjamanAktifAnggota(currentUser.id);
   
   // LOGIKA PENGECEKAN TOP-UP & BLOKIR
   let blockReason = "";
   let isEligibleForTopUp = false;
+  let isUrgentOverride = false;
   let sisaCicilanLama = 0;
   let idPinjamanLama = null;
 
   if (pinjamanAktif.length > 0) {
     const p = pinjamanAktif[0];
     if (["PENDING_L1", "PENDING_L2", "PENDING_L3", "APPROVED"].includes(p.status)) {
-      blockReason = "Anda masih memiliki pengajuan pinjaman yang sedang diproses. Harap tunggu hingga proses selesai.";
+      blockReason = "Masih ada pengajuan pinjaman yang sedang diproses. Harap tunggu hingga proses selesai.";
       idPinjamanLama = p.id;
     } else if (p.status === "ACTIVE") {
       // Hitung sisa cicilan untuk menentukan kelayakan Top-Up
@@ -36,185 +83,140 @@ export default async function AjukanPinjamanPage({
 
       sisaCicilanLama = count || 0;
 
-      if (sisaCicilanLama > 3) {
-        blockReason = `Anda tidak dapat mengajukan pinjaman baru. Sisa cicilan Anda saat ini masih ${sisaCicilanLama} kali (Syarat Top-Up maksimal sisa 3 cicilan).`;
+      if (sisaCicilanLama > 5) {
+        // Blokir mutlak, bahkan untuk Bendahara
+        blockReason = `Pinjaman tidak dapat diajukan. Sisa cicilan saat ini sudah mencapai ${sisaCicilanLama} kali (Batas absolut maksimal 5).`;
+        idPinjamanLama = p.id;
+      } else if (sisaCicilanLama > 3 && !canOverride) {
+        // Blokir untuk Anggota biasa
+        blockReason = `Anda tidak dapat mengajukan pinjaman baru. Sisa cicilan Anda saat ini masih ${sisaCicilanLama} kali (Syarat normal Top-Up maksimal sisa 3 cicilan).`;
         idPinjamanLama = p.id;
       } else {
+        // Lolos pengecekan
         isEligibleForTopUp = true;
+        
+        // Jika sisa > 3 tapi lolos, berarti ini adalah Override Bendahara
+        if (sisaCicilanLama > 3 && canOverride) {
+          isUrgentOverride = true;
+        }
       }
     }
   }
 
   return (
-    <div style={{ backgroundColor: "#f1f5f9", minHeight: "100vh", paddingBottom: "40px" }}>
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+    <main className="kop-shell bg-slate-100 min-h-screen">
+      <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
 
-        .fintech-header {
-          position: relative;
-          background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%);
-          overflow: hidden;
-          padding: 24px 20px;
-          height: 200px;
-          border-bottom-left-radius: 24px;
-          border-bottom-right-radius: 24px;
-        }
-        .fintech-header::before, .fintech-header::after {
-          content: ''; position: absolute; pointer-events: none; border-radius: 50%;
-        }
-        .fintech-header::before { top: -40px; left: -40px; width: 150px; height: 150px; background: rgba(255,255,255,0.08); }
-        .fintech-header::after { bottom: -20px; right: -60px; width: 200px; height: 200px; background: rgba(255,255,255,0.05); }
-
-        .card-fintech {
-          background: #fff;
-          border-radius: 16px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 2px 12px rgba(15,45,107,.06);
-          padding: 24px;
-        }
-
-        .fintech-input {
-          width: 100%;
-          padding: 14px 16px;
-          border-radius: 12px;
-          border: 1px solid #e2e8f0;
-          font-size: 14px;
-          transition: all 0.2s ease;
-          background-color: #fff;
-          color: #1e293b;
-        }
-        .fintech-input:focus {
-          outline: none;
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37,99,235,.12);
-        }
-      `,
-        }}
-      />
-
-      <header className="fintech-header">
-        <div style={{ maxWidth: "640px", margin: "0 auto", position: "relative", zIndex: 10 }}>
-          <Link
-            href="/dashboard/pinjaman"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              background: "rgba(255,255,255,0.2)",
-              color: "#fff",
-              padding: "8px 16px",
-              borderRadius: "20px",
-              textDecoration: "none",
-              fontSize: "14px",
-              fontWeight: "500",
-              backdropFilter: "blur(4px)",
-              marginBottom: "20px",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            Pinjaman
-          </Link>
-          <h1 style={{ color: "#fff", margin: 0, fontSize: "26px", fontWeight: "700" }}>
-            Pengajuan Pinjaman
-          </h1>
-        </div>
-      </header>
-
-      <main style={{ maxWidth: "640px", margin: "-50px auto 0 auto", padding: "0 20px", position: "relative", zIndex: 20 }}>
-        {searchParams.error && (
-          <div
-            style={{
-              background: "#fee2e2",
-              border: "1px solid #fecaca",
-              color: "#b91c1c",
-              borderRadius: "12px",
-              padding: "14px 18px",
-              marginBottom: "20px",
-              fontSize: "14px",
-              fontWeight: "500",
-            }}
-          >
-            ✗ {searchParams.error}
+      <div className="w-full max-w-5xl mx-auto bg-slate-100 min-h-screen relative sm:shadow-xl sm:border-x sm:border-slate-200">
+        
+        {/* --- Header Area --- */}
+        <header className="kop-header">
+          <div className="kop-orb" style={{ width: 280, height: 280, top: -100, right: -100, background: 'radial-gradient(circle, rgba(255,255,255,.1) 0%, transparent 70%)' }} />
+          <div className="kop-orb" style={{ width: 200, height: 200, bottom: -40, left: -40, background: 'radial-gradient(circle, rgba(96,165,250,.2) 0%, transparent 70%)' }} />
+          
+          <div style={{ position: "relative", zIndex: 10, maxWidth: "640px", margin: "0 auto" }}>
+            <Link href="/dashboard/pinjaman?view=personal" className="kop-btn-nav" style={{ marginBottom: "20px" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+              Kembali
+            </Link>
+            <h1 style={{ color: "#fff", margin: 0, fontSize: "28px", fontWeight: "800", letterSpacing: "-.02em" }}>
+              Formulir Pinjaman
+            </h1>
+            <p style={{ color: "rgba(255,255,255,0.8)", margin: "4px 0 0 0", fontSize: "14px", fontWeight: "500" }}>
+              Pengajuan pembiayaan baru atau Top-Up.
+            </p>
           </div>
-        )}
+        </header>
 
-        {blockReason ? (
-          <div className="card-fintech" style={{ textAlign: "center" }}>
-            <svg style={{ margin: "0 auto 16px auto", display: "block" }} width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            <div style={{ fontWeight: "700", color: "#0f2d6b", marginBottom: "8px" }}>
-              Pengajuan Diblokir Sistem
-            </div>
-            <div style={{ fontSize: "14px", color: "#64748b", marginBottom: "20px", lineHeight: "1.6" }}>
-              {blockReason}
-            </div>
-            {idPinjamanLama && (
-              <Link
-                href={`/dashboard/pinjaman/${idPinjamanLama}`}
-                style={{
-                  display: "inline-block",
-                  background: "#d97706",
-                  color: "#fff",
-                  padding: "10px 24px",
-                  borderRadius: "10px",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                  textDecoration: "none",
-                }}
-              >
-                Lihat Pinjaman Aktif →
-              </Link>
-            )}
-          </div>
-        ) : (
-          <>
-            {isEligibleForTopUp && (
-              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", borderRadius: "16px", padding: "16px", marginBottom: "20px" }}>
-                <div style={{ fontWeight: "700", fontSize: "14px", marginBottom: "4px" }}>
-                  ✨ Anda Memenuhi Syarat Top-Up!
-                </div>
-                <div style={{ fontSize: "13px" }}>
-                  Sisa cicilan Anda tinggal {sisaCicilanLama} kali. Anda dapat mengajukan pinjaman baru. Pencairan nanti akan otomatis dipotong untuk melunasi sisa pinjaman lama Anda.
-                </div>
+        {/* --- Main Content Area --- */}
+        <div className="kop-content-wrapper">
+          <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+            
+            {searchParams.error && (
+              <div style={{ background: "#fef2f2", border: "1.5px solid #fecaca", color: "#b91c1c", borderRadius: "14px", padding: "16px", marginBottom: "20px", fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px" }}>
+                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>{searchParams.error}</span>
               </div>
             )}
-            
-            <div className="card-fintech">
-              <AjukanPinjamanForm />
-            </div>
-          </>
-        )}
 
-        <div
-          style={{
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            borderRadius: "16px",
-            padding: "20px",
-            marginTop: "20px",
-          }}
-        >
-          <div style={{ fontWeight: "700", fontSize: "14px", color: "#475569", marginBottom: "10px" }}>
-            Syarat & Ketentuan
+            {blockReason ? (
+              <div className="kop-card" style={{ padding: "40px 24px", textAlign: "center" }}>
+                <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#fffbeb", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </div>
+                <div style={{ fontWeight: "800", fontSize: "18px", color: "#0f172a", marginBottom: "8px" }}>
+                  Pengajuan Diblokir Sistem
+                </div>
+                <div style={{ fontSize: "14px", color: "#475569", marginBottom: "24px", lineHeight: "1.6", fontWeight: "500", maxWidth: "400px", margin: "0 auto 24px" }}>
+                  {blockReason}
+                </div>
+                {idPinjamanLama && (
+                  <Link href={`/dashboard/pinjaman/${idPinjamanLama}`} style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#f8fafc", color: "#1e293b", padding: "12px 24px", borderRadius: "12px", fontWeight: "800", fontSize: "13px", textDecoration: "none", border: "1.5px solid #e2e8f0" }}>
+                    Cek Pinjaman Aktif <span style={{ fontSize: "16px" }}>&rarr;</span>
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Banner Normal Top-Up */}
+                {isEligibleForTopUp && !isUrgentOverride && (
+                  <div style={{ background: "linear-gradient(to right, #f0fdf4, #dcfce7)", border: "1.5px solid #bbf7d0", color: "#166534", borderRadius: "16px", padding: "16px 20px", marginBottom: "20px", display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                    <div style={{ fontSize: "20px" }}>✨</div>
+                    <div>
+                      <div style={{ fontWeight: "800", fontSize: "14px", marginBottom: "4px" }}>Memenuhi Syarat Top-Up!</div>
+                      <div style={{ fontSize: "13px", fontWeight: "500", lineHeight: "1.5" }}>
+                        Sisa cicilan tinggal {sisaCicilanLama} kali. Pencairan baru akan otomatis dipotong untuk melunasi sisa pinjaman lama Anda.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Banner Urgency Override (Hanya terlihat oleh Bendahara/Admin) */}
+                {isUrgentOverride && (
+                  <div style={{ background: "linear-gradient(to right, #fff1f2, #ffe4e6)", border: "1.5px solid #fecaca", color: "#be123c", borderRadius: "16px", padding: "16px 20px", marginBottom: "20px", display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                    <div style={{ fontSize: "20px" }}>⚠️</div>
+                    <div>
+                      <div style={{ fontWeight: "800", fontSize: "14px", marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        URGENCY OVERRIDE 
+                        <span style={{ fontSize: "10px", background: "#e11d48", color: "#fff", padding: "2px 6px", borderRadius: "6px" }}>ADMIN ONLY</span>
+                      </div>
+                      <div style={{ fontSize: "13px", fontWeight: "600", lineHeight: "1.5" }}>
+                        Sisa cicilan adalah {sisaCicilanLama} kali (Melebihi batas normal 3). Form ini diloloskan khusus atas otoritas jabatan {currentUser.role}.
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="kop-card" style={{ padding: "24px" }}>
+                  {/* Pastikan input dan class di dalam AjukanPinjamanForm juga disesuaikan ke .kop-input */}
+                  <AjukanPinjamanForm />
+                </div>
+              </>
+            )}
+
+            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "24px", marginTop: "20px" }}>
+              <div style={{ fontWeight: "800", fontSize: "14px", color: "#0f172a", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                Syarat & Ketentuan Kebijakan
+              </div>
+              <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "13px", color: "#475569", lineHeight: "1.6", fontWeight: "500", display: "flex", flexDirection: "column", gap: "6px" }}>
+                <li>Anggota aktif koperasi PT Elsewedy Electric Indonesia</li>
+                <li><strong style={{ color: "#0f172a" }}>Plafon maksimal pengajuan Rp 15.000.000</strong></li>
+                <li><strong style={{ color: "#0f172a" }}>Tenor maksimal 12 bulan</strong></li>
+                <li>Biaya admin 4% akan dipotong otomatis di awal pencairan</li>
+                <li>Persetujuan 3 level: Sekretaris &rarr; Bendahara &rarr; Ketua</li>
+                <li>Berlaku sistem <strong style={{ color: "#0f172a" }}>Auto-Settlement</strong> untuk Top-Up (Sisa utang sebelumnya dilunasi langsung dari pencairan baru)</li>
+              </ul>
+            </div>
+
           </div>
-          <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "#64748b", lineHeight: "1.7" }}>
-            <li>Anggota aktif koperasi PT Elsewedy Electric Indonesia</li>
-            <li><strong>Plafon maksimal Rp 15.000.000</strong></li>
-            <li><strong>Tenor maksimal 12 bulan</strong></li>
-            <li>Biaya admin 4% dipotong di awal pencairan</li>
-            <li>Persetujuan 3 level: Sekretaris → Bendahara → Ketua</li>
-            <li>Berlaku sistem Auto-Settlement untuk Top-Up (Sisa utang dilunasi dari pencairan baru)</li>
-          </ul>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
