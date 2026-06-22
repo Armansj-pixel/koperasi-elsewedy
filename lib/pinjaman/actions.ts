@@ -240,22 +240,29 @@ export async function getPinjamanAktifAnggota(userId: string) {
   return data ?? []
 }
 
-// ─── ACTION: Ajukan Pinjaman (Dengan Logika Top-Up Asli) ──────────────────────
+// ─── ACTION: Ajukan Pinjaman (Dengan Logika Top-Up & Override) ────────────────
 
 const AjukanPinjamanSchema = z.object({
+  user_id: z.string().uuid().optional(), // Tambahan untuk menangkap ID jika diinput oleh admin
   nominal: z.number().min(100000, 'Minimal pinjaman Rp 100.000').max(15000000, 'Maksimal pinjaman Rp 15.000.000'),
   tenor_bulan: z.number().min(1).max(12),
   catatan_pengaju: z.string().optional(),
 })
 
 export async function ajukanPinjaman(formData: FormData) {
-  const session = await requireRole(['ANGGOTA'])
+  // Buka pintu untuk ANGGOTA, BENDAHARA, dan SUPERADMIN
+  const session = await requireRole(['ANGGOTA', 'BENDAHARA', 'SUPERADMIN'])
+  
+  // Deteksi apakah yang mengeksekusi memiliki hak Override
+  const canOverride = ['BENDAHARA', 'SUPERADMIN'].includes(session.role)
 
   const nominalRaw = (formData.get('nominal') as string) ?? ''
   const nominal = parseInt(nominalRaw.replace(/\D/g, ''))
   const tenor = parseInt(formData.get('tenor_bulan') as string)
+  const inputUserId = formData.get('user_id') as string | null
 
   const parsed = AjukanPinjamanSchema.safeParse({
+    user_id: inputUserId || undefined,
     nominal,
     tenor_bulan: tenor,
     catatan_pengaju: formData.get('catatan_pengaju') as string,
@@ -266,8 +273,11 @@ export async function ajukanPinjaman(formData: FormData) {
     redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(msg)}`)
   }
 
+  // Tentukan target user (Anggota untuk dirinya sendiri, atau Admin untuk anggota lain)
+  const targetUserId = (canOverride && parsed.data.user_id) ? parsed.data.user_id : session.id
+
   const supabase = await createClient()
-  const pinjamanAktif = await getPinjamanAktifAnggota(session.id)
+  const pinjamanAktif = await getPinjamanAktifAnggota(targetUserId)
   
   let sisaPelunasanLama = 0
   let idPinjamanLamaLunas: number | null = null
@@ -277,7 +287,7 @@ export async function ajukanPinjaman(formData: FormData) {
     const pinjamanSekarang = pinjamanAktif[0]
 
     if (['PENDING_L1', 'PENDING_L2', 'PENDING_L3', 'APPROVED'].includes(pinjamanSekarang.status)) {
-      redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent('Anda masih memiliki pengajuan pinjaman yang sedang diproses.')}`)
+      redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent('Masih ada pengajuan pinjaman yang sedang diproses untuk anggota ini.')}`)
     }
 
     if (pinjamanSekarang.status === 'ACTIVE') {
@@ -289,13 +299,23 @@ export async function ajukanPinjaman(formData: FormData) {
 
       const jumlahSisaBulan = cicilanBelumLunas?.length || 0
 
-      if (jumlahSisaBulan > 3) {
-        redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Pengajuan ditolak. Sisa cicilan Anda masih ${jumlahSisaBulan} kali. Top-Up maksimal sisa 3 kali.`)}`)
+      // LOGIKA BLOKIR & OVERRIDE
+      if (jumlahSisaBulan > 5) {
+        redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Pengajuan ditolak mutlak. Sisa cicilan masih ${jumlahSisaBulan} kali (Batas maksimal absolut 5).`)}`)
+      }
+
+      if (jumlahSisaBulan > 3 && !canOverride) {
+        redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Pengajuan ditolak. Sisa cicilan masih ${jumlahSisaBulan} kali. Top-Up reguler maksimal sisa 3 kali.`)}`)
       }
 
       sisaPelunasanLama = cicilanBelumLunas?.reduce((total, item) => total + Number(item.nominal_cicilan), 0) || 0
       idPinjamanLamaLunas = pinjamanSekarang.id
       catatanTopUp = `\n\n[SISTEM TOP-UP] Pencairan dipotong otomatis Rp ${sisaPelunasanLama.toLocaleString('id-ID')} untuk pelunasan kontrak lama.`
+      
+      // Tambahkan jejak audit jika ini adalah hasil override
+      if (jumlahSisaBulan > 3 && canOverride) {
+        catatanTopUp += `\n[URGENCY OVERRIDE] Di-bypass oleh otoritas ${session.role} (Sisa cicilan lama: ${jumlahSisaBulan}x).`
+      }
     }
   }
 
@@ -311,7 +331,7 @@ export async function ajukanPinjaman(formData: FormData) {
   const { data: pinjaman, error } = await supabase
     .from('pinjaman')
     .insert({
-      user_id: session.id,
+      user_id: targetUserId, // Memastikan data masuk ke akun yang benar
       nomor_kontrak: `PINJ-${Date.now()}`,
       nominal_pokok: nominal,
       biaya_admin: biayaAdmin,
@@ -336,7 +356,9 @@ export async function ajukanPinjaman(formData: FormData) {
   }
 
   revalidatePath('/dashboard/pinjaman')
-  redirect(`/dashboard/pinjaman/${pinjaman.id}?success=${encodeURIComponent('Pengajuan pinjaman berhasil dikirim')}`)
+  // Redirect ke halaman detail (dengan param ?view=personal jika yang mengeksekusi bukan sedang impersonate)
+  const viewParam = !canOverride ? '?view=personal&' : '?'
+  redirect(`/dashboard/pinjaman/${pinjaman.id}${viewParam}success=${encodeURIComponent('Pengajuan pinjaman berhasil dikirim')}`)
 }
 
 // ─── ACTION: Approve / Reject Pinjaman ───────────────────────────────────────
