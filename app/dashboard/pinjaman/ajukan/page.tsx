@@ -52,29 +52,39 @@ export default async function AjukanPinjamanPage({
 }: {
   searchParams: { error?: string };
 }) {
-  // Izinkan pengurus masuk agar bisa melakukan "Urgency Override"
+  // 1. Izinkan pengurus masuk
   const currentUser = await requireRole(["ANGGOTA", "BENDAHARA", "SUPERADMIN"]);
   const supabase = await createClient();
 
-  // Cek apakah user yang login memiliki otoritas override
+  // 2. Deteksi Otoritas
   const canOverride = ["BENDAHARA", "SUPERADMIN"].includes(currentUser.role);
 
+  // 3. AMBIL DATA ANGGOTA (Hanya jika yang login adalah admin)
+  let anggotaList: any[] = [];
+  if (canOverride) {
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, nama, nik')
+      .eq('role', 'ANGGOTA')
+      .order('nama', { ascending: true });
+    anggotaList = users || [];
+  }
+
+  // 4. LOGIKA BLOKIR (Hanya berlaku ketat untuk Anggota Biasa)
   const pinjamanAktif = await getPinjamanAktifAnggota(currentUser.id);
   
-  // LOGIKA PENGECEKAN TOP-UP & BLOKIR
   let blockReason = "";
   let isEligibleForTopUp = false;
-  let isUrgentOverride = false;
   let sisaCicilanLama = 0;
   let idPinjamanLama = null;
 
+  // Jika yang login punya pinjaman (Mengecek status dirinya sendiri)
   if (pinjamanAktif.length > 0) {
     const p = pinjamanAktif[0];
     if (["PENDING_L1", "PENDING_L2", "PENDING_L3", "APPROVED"].includes(p.status)) {
       blockReason = "Masih ada pengajuan pinjaman yang sedang diproses. Harap tunggu hingga proses selesai.";
       idPinjamanLama = p.id;
     } else if (p.status === "ACTIVE") {
-      // Hitung sisa cicilan untuk menentukan kelayakan Top-Up
       const { count } = await supabase
         .from('cicilan_pinjaman')
         .select('*', { count: 'exact', head: true })
@@ -83,24 +93,19 @@ export default async function AjukanPinjamanPage({
 
       sisaCicilanLama = count || 0;
 
-      if (sisaCicilanLama > 5) {
-        // Blokir mutlak, bahkan untuk Bendahara
-        blockReason = `Pinjaman tidak dapat diajukan. Sisa cicilan saat ini sudah mencapai ${sisaCicilanLama} kali (Batas absolut maksimal 5).`;
-        idPinjamanLama = p.id;
-      } else if (sisaCicilanLama > 3 && !canOverride) {
-        // Blokir untuk Anggota biasa
+      // Jika dia Anggota Biasa & Sisa > 3, BLOKIR. (Kalau Bendahara, form tetap tembus)
+      if (sisaCicilanLama > 3 && !canOverride) {
         blockReason = `Anda tidak dapat mengajukan pinjaman baru. Sisa cicilan Anda saat ini masih ${sisaCicilanLama} kali (Syarat normal Top-Up maksimal sisa 3 cicilan).`;
         idPinjamanLama = p.id;
       } else {
-        // Lolos pengecekan
         isEligibleForTopUp = true;
-        
-        // Jika sisa > 3 tapi lolos, berarti ini adalah Override Bendahara
-        if (sisaCicilanLama > 3 && canOverride) {
-          isUrgentOverride = true;
-        }
       }
     }
+  }
+
+  // Jika Pengurus yang buka form, PAKSA buka blokirnya agar formnya muncul
+  if (canOverride) {
+    blockReason = ""; 
   }
 
   return (
@@ -143,7 +148,7 @@ export default async function AjukanPinjamanPage({
 
             {blockReason ? (
               <div className="kop-card" style={{ padding: "40px 24px", textAlign: "center" }}>
-                <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#fffbeb", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#fffbeb", display: "flex", alignItems: "center", justify-content: "center", margin: "0 auto 16px" }}>
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                     <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
@@ -164,7 +169,7 @@ export default async function AjukanPinjamanPage({
             ) : (
               <>
                 {/* Banner Normal Top-Up */}
-                {isEligibleForTopUp && !isUrgentOverride && (
+                {isEligibleForTopUp && !canOverride && (
                   <div style={{ background: "linear-gradient(to right, #f0fdf4, #dcfce7)", border: "1.5px solid #bbf7d0", color: "#166534", borderRadius: "16px", padding: "16px 20px", marginBottom: "20px", display: "flex", gap: "12px", alignItems: "flex-start" }}>
                     <div style={{ fontSize: "20px" }}>✨</div>
                     <div>
@@ -175,26 +180,10 @@ export default async function AjukanPinjamanPage({
                     </div>
                   </div>
                 )}
-
-                {/* Banner Urgency Override (Hanya terlihat oleh Bendahara/Admin) */}
-                {isUrgentOverride && (
-                  <div style={{ background: "linear-gradient(to right, #fff1f2, #ffe4e6)", border: "1.5px solid #fecaca", color: "#be123c", borderRadius: "16px", padding: "16px 20px", marginBottom: "20px", display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                    <div style={{ fontSize: "20px" }}>⚠️</div>
-                    <div>
-                      <div style={{ fontWeight: "800", fontSize: "14px", marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
-                        URGENCY OVERRIDE 
-                        <span style={{ fontSize: "10px", background: "#e11d48", color: "#fff", padding: "2px 6px", borderRadius: "6px" }}>ADMIN ONLY</span>
-                      </div>
-                      <div style={{ fontSize: "13px", fontWeight: "600", lineHeight: "1.5" }}>
-                        Sisa cicilan adalah {sisaCicilanLama} kali (Melebihi batas normal 3). Form ini diloloskan khusus atas otoritas jabatan {currentUser.role}.
-                      </div>
-                    </div>
-                  </div>
-                )}
                 
                 <div className="kop-card" style={{ padding: "24px" }}>
-                  {/* Pastikan input dan class di dalam AjukanPinjamanForm juga disesuaikan ke .kop-input */}
-                  <AjukanPinjamanForm />
+                  {/* INI KUNCI AGAR DROPDOWN MUNCUL */}
+                  <AjukanPinjamanForm canOverride={canOverride} anggotaList={anggotaList} />
                 </div>
               </>
             )}
