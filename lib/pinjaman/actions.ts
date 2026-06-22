@@ -68,7 +68,6 @@ export interface CicilanPinjaman {
   created_at: string
 }
 
-// Type khusus untuk kompatibilitas UI yang sudah ada agar tidak memicu build-error
 export interface PinjamanWithUser extends Partial<Pinjaman> {
   user_nama: string
   user_nik: string
@@ -89,7 +88,7 @@ export async function hitungPinjaman(nominal: number, tenor: number) {
   return { biayaAdmin, totalDiterima, cicilanPerBulan }
 }
 
-// ─── Generate Jadwal Cicilan ──────────────────────────────────────────────────
+// ─── Generate Jadwal Cicilan (Aturan Tgl 10 & 25) ─────────────────────────────
 
 function generateJadwalCicilan(
   pinjamanId: number,
@@ -101,18 +100,33 @@ function generateJadwalCicilan(
   const cicilan = []
   let sisaPokok = nominal
 
+  const day = tanggalMulai.getDate()
+  let startMonth = tanggalMulai.getMonth()
+  const startYear = tanggalMulai.getFullYear()
+
+  // Jika lewat tanggal 10, cicilan pertama bergeser ke tanggal 25 bulan berikutnya
+  if (day > 10) {
+    startMonth += 1
+  }
+
   for (let i = 1; i <= tenor; i++) {
-    const jatuhTempo = new Date(tanggalMulai)
-    jatuhTempo.setMonth(jatuhTempo.getMonth() + i)
+    // Dipaksa jatuh tempo ke tanggal 25 setiap bulannya
+    const jatuhTempo = new Date(startYear, startMonth + (i - 1), 25)
 
     const nominalCicilan = i === tenor ? sisaPokok : cicilanPerBulan
     sisaPokok -= nominalCicilan
+
+    // Format string yyyy-mm-dd yang aman dari pergeseran timezone ISO String
+    const yyyy = jatuhTempo.getFullYear()
+    const mm = String(jatuhTempo.getMonth() + 1).padStart(2, '0')
+    const dd = String(jatuhTempo.getDate()).padStart(2, '0')
+    const tanggalJatuhTempoStr = `${yyyy}-${mm}-${dd}`
 
     cicilan.push({
       pinjaman_id: pinjamanId,
       nomor_cicilan: i,
       nominal_cicilan: nominalCicilan,
-      tanggal_jatuh_tempo: jatuhTempo.toISOString().split('T')[0],
+      tanggal_jatuh_tempo: tanggalJatuhTempoStr,
       status: 'SCHEDULED' as CicilanStatus,
       created_at: new Date().toISOString()
     })
@@ -151,9 +165,9 @@ export async function getPinjamanList(filter?: {
 
   const result: PinjamanWithUser[] = (pinjaman ?? []).map((p) => ({
     ...p,
-    nominal: p.nominal_pokok, // Translasi kompatibilitas UI
-    total_diterima: p.nominal_diterima, // Translasi kompatibilitas UI
-    tanggal_pencairan: p.tanggal_cair, // Translasi kompatibilitas UI
+    nominal: p.nominal_pokok, 
+    total_diterima: p.nominal_diterima, 
+    tanggal_pencairan: p.tanggal_cair, 
     user_nama: userMap.get(p.user_id)?.nama ?? 'Unknown',
     user_nik: userMap.get(p.user_id)?.nik ?? '-',
   }))
@@ -174,7 +188,6 @@ export async function getPinjamanDetail(id: number) {
 
   if (fetchError || !pinjaman) return { data: null, cicilan: [], error: fetchError?.message ?? 'Not found' }
 
-  // Menarik profil lengkap yang sudah Mas sediakan di tabel users
   const { data: user } = await supabase
     .from('users')
     .select('*')
@@ -206,9 +219,9 @@ export async function getPinjamanDetail(id: number) {
   return {
     data: {
       ...pinjaman,
-      nominal: pinjaman.nominal_pokok, // Translasi UI
-      total_diterima: pinjaman.nominal_diterima, // Translasi UI
-      tanggal_pencairan: pinjaman.tanggal_cair, // Translasi UI
+      nominal: pinjaman.nominal_pokok, 
+      total_diterima: pinjaman.nominal_diterima, 
+      tanggal_pencairan: pinjaman.tanggal_cair, 
       user_nama: user?.nama ?? 'Unknown',
       user_nik: user?.nik ?? '-',
       user_no_hp: user?.no_hp ?? '-',
@@ -240,20 +253,17 @@ export async function getPinjamanAktifAnggota(userId: string) {
   return data ?? []
 }
 
-// ─── ACTION: Ajukan Pinjaman (Dengan Logika Top-Up & Override) ────────────────
+// ─── ACTION: Ajukan Pinjaman ──────────────────────────────────────────────────
 
 const AjukanPinjamanSchema = z.object({
-  user_id: z.string().uuid().optional(), // Tambahan untuk menangkap ID jika diinput oleh admin
+  user_id: z.string().uuid().optional(), 
   nominal: z.number().min(100000, 'Minimal pinjaman Rp 100.000').max(15000000, 'Maksimal pinjaman Rp 15.000.000'),
   tenor_bulan: z.number().min(1).max(12),
   catatan_pengaju: z.string().optional(),
 })
 
 export async function ajukanPinjaman(formData: FormData) {
-  // Buka pintu untuk ANGGOTA, BENDAHARA, dan SUPERADMIN
   const session = await requireRole(['ANGGOTA', 'BENDAHARA', 'SUPERADMIN'])
-  
-  // Deteksi apakah yang mengeksekusi memiliki hak Override
   const canOverride = ['BENDAHARA', 'SUPERADMIN'].includes(session.role)
 
   const nominalRaw = (formData.get('nominal') as string) ?? ''
@@ -273,7 +283,6 @@ export async function ajukanPinjaman(formData: FormData) {
     redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(msg)}`)
   }
 
-  // Tentukan target user (Anggota untuk dirinya sendiri, atau Admin untuk anggota lain)
   const targetUserId = (canOverride && parsed.data.user_id) ? parsed.data.user_id : session.id
 
   const supabase = await createClient()
@@ -299,7 +308,6 @@ export async function ajukanPinjaman(formData: FormData) {
 
       const jumlahSisaBulan = cicilanBelumLunas?.length || 0
 
-      // LOGIKA BLOKIR & OVERRIDE
       if (jumlahSisaBulan > 5) {
         redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Pengajuan ditolak mutlak. Sisa cicilan masih ${jumlahSisaBulan} kali (Batas maksimal absolut 5).`)}`)
       }
@@ -312,7 +320,6 @@ export async function ajukanPinjaman(formData: FormData) {
       idPinjamanLamaLunas = pinjamanSekarang.id
       catatanTopUp = `\n\n[SISTEM TOP-UP] Pencairan dipotong otomatis Rp ${sisaPelunasanLama.toLocaleString('id-ID')} untuk pelunasan kontrak lama.`
       
-      // Tambahkan jejak audit jika ini adalah hasil override
       if (jumlahSisaBulan > 3 && canOverride) {
         catatanTopUp += `\n[URGENCY OVERRIDE] Di-bypass oleh otoritas ${session.role} (Sisa cicilan lama: ${jumlahSisaBulan}x).`
       }
@@ -331,7 +338,7 @@ export async function ajukanPinjaman(formData: FormData) {
   const { data: pinjaman, error } = await supabase
     .from('pinjaman')
     .insert({
-      user_id: targetUserId, // Memastikan data masuk ke akun yang benar
+      user_id: targetUserId,
       nomor_kontrak: `PINJ-${Date.now()}`,
       nominal_pokok: nominal,
       biaya_admin: biayaAdmin,
@@ -356,7 +363,6 @@ export async function ajukanPinjaman(formData: FormData) {
   }
 
   revalidatePath('/dashboard/pinjaman')
-  // Redirect ke halaman detail (dengan param ?view=personal jika yang mengeksekusi bukan sedang impersonate)
   const viewParam = !canOverride ? '?view=personal&' : '?'
   redirect(`/dashboard/pinjaman/${pinjaman.id}${viewParam}success=${encodeURIComponent('Pengajuan pinjaman berhasil dikirim')}`)
 }
@@ -455,7 +461,7 @@ export async function approvePinjaman(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent(msg)}`)
 }
 
-// ─── ACTION: Cairkan Pinjaman & Eksekusi Pelunasan Top-Up ─────────────────────
+// ─── ACTION: Cairkan Pinjaman ─────────────────────────────────────────────────
 
 export async function cairkanPinjaman(formData: FormData) {
   const session = await requireRole(['BENDAHARA'])
@@ -537,7 +543,7 @@ export async function cairkanPinjaman(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pencairan berhasil! Jadwal cicilan & pelunasan berjalan otomatis.')}`)
 }
 
-// ─── ACTION: Bayar Cicilan (Bulanan) ──────────────────────────────────────────
+// ─── ACTION: Bayar Cicilan (Bulanan Manual) ───────────────────────────────────
 
 export async function bayarCicilan(formData: FormData) {
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
@@ -584,7 +590,7 @@ export async function bayarCicilan(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pembayaran cicilan berhasil dicatat')}`)
 }
 
-// ─── ACTION: Pelunasan Pinjaman Langsung (Sekaligus) ──────────────────────────
+// ─── ACTION: Pelunasan Pinjaman Sekaligus ─────────────────────────────────────
 
 export async function pelunasanPinjamanSekaligus(formData: FormData) {
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
@@ -635,7 +641,7 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan berhasil diproses. Status pinjaman sekarang LUNAS.')}`)
 }
 
-// ─── ACTION: Input Pinjaman Existing (Migrasi) ────────────────────────────────
+// ─── ACTION: Input Pinjaman Existing ─────────────────────────────────────────
 
 const PinjamanExistingSchema = z.object({
   user_id: z.string().uuid('User ID tidak valid'),
@@ -749,4 +755,64 @@ export async function getStatistikPinjaman() {
     totalOutstanding: aktif.reduce((sum, p) => sum + (p.nominal_pokok ?? 0), 0),
     totalCicilanBulanan: aktif.reduce((sum, p) => sum + (p.cicilan_per_bulan ?? 0), 0),
   }
+}
+
+// ─── ACTION: Sinkronisasi Pembayaran Massal (Payroll Pinjaman) ─────────────────
+
+export async function potongCicilanMassal(bulan: number, tahun: number) {
+  const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
+  const supabase = await createClient()
+
+  // Filter pencarian cicilan berdasarkan pattern jatuh tempo tahun-bulan "YYYY-MM"
+  const targetMonthStr = `${tahun}-${String(bulan).padStart(2, '0')}`
+
+  const { data: cicilanTertarget, error: fetchError } = await supabase
+    .from('cicilan_pinjaman')
+    .select('*')
+    .like('tanggal_jatuh_tempo', `${targetMonthStr}%`)
+    .in('status', ['SCHEDULED', 'OVERDUE'])
+
+  if (fetchError) return { success: false, message: "Gagal menarik data cicilan dari database." }
+  if (!cicilanTertarget || cicilanTertarget.length === 0) {
+    return { success: false, message: `Tidak ada tagihan cicilan aktif/jatuh tempo untuk periode ${targetMonthStr}.` }
+  }
+
+  const cicilanIds = cicilanTertarget.map(c => c.id)
+
+  // 1. Eksekusi pelunasan massal semua cicilan di bulan tersebut
+  const { error: updateError } = await supabase
+    .from('cicilan_pinjaman')
+    .update({
+      status: 'PAID',
+      tanggal_pembayaran: new Date().toISOString().split('T')[0]
+    })
+    .in('id', cicilanIds)
+
+  if (updateError) return { success: false, message: "Gagal memproses pembayaran massal." }
+
+  // 2. Scan & rekonsiliasi otomatis status pinjaman utama yang sudah selesai angsurannya
+  const pinjamanIds = [...new Set(cicilanTertarget.map(c => c.pinjaman_id))]
+
+  for (const pId of pinjamanIds) {
+    const { data: cekCicilan } = await supabase
+      .from('cicilan_pinjaman')
+      .select('status')
+      .eq('pinjaman_id', pId)
+
+    const semuaLunas = cekCicilan?.every(c => c.status === 'PAID' || c.status === 'WAIVED')
+    
+    if (semuaLunas) {
+      await supabase
+        .from('pinjaman')
+        .update({ 
+          status: 'LUNAS', 
+          tanggal_lunas: new Date().toISOString().split('T')[0],
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', pId)
+    }
+  }
+
+  revalidatePath('/dashboard/pinjaman')
+  return { success: true, message: `Berhasil memproses payroll pinjaman! ${cicilanTertarget.length} tagihan angsuran periode ${targetMonthStr} telah dibayarkan secara massal.` }
 }
