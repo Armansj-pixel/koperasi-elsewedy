@@ -284,3 +284,45 @@ export async function getNeracaSaldo() {
   return { data: activeNeraca };
 }
 
+// =====================================================================
+// 3. ACTION: CATAT PEMASUKAN / PENDAPATAN LAINNYA
+// =====================================================================
+
+const PendapatanSchema = z.object({
+  nominal: z.coerce.number().min(500, "Minimal pendapatan Rp 500"),
+  akun_pendapatan: z.string().min(1, "Jenis pendapatan wajib dipilih"), // Contoh: '402', '403', '404'
+  tujuan_dana: z.enum(['101', '102-MND', '102-MAY', '102-BRIS']), // Uangnya masuk ke mana?
+  tanggal: z.string(),
+  keterangan: z.string().min(3, "Keterangan pendapatan wajib diisi")
+});
+
+export async function catatPendapatanLain(formData: FormData) {
+  const session = await requireRole(["BENDAHARA", "SUPERADMIN"]);
+  
+  const raw = {
+    nominal: formData.get("nominal"),
+    akun_pendapatan: formData.get("akun_pendapatan") as string,
+    tujuan_dana: formData.get("tujuan_dana") as string || "102-MND", // Default masuk ke Mandiri
+    tanggal: (formData.get("tanggal") as string) || new Date().toISOString().split("T")[0],
+    keterangan: formData.get("keterangan") as string
+  };
+
+  const parsed = PendapatanSchema.safeParse(raw);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+
+  const { nominal, akun_pendapatan, tujuan_dana, tanggal, keterangan } = parsed.data;
+
+  // Panggil Core Engine Jurnal
+  const result = await buatJurnalUmum({
+    nomor_bukti: `INC-${Date.now()}`,
+    tanggal_transaksi: tanggal,
+    keterangan: keterangan,
+    jenis_sumber: 'MANUAL',
+    lines: [
+      { kode_akun: tujuan_dana, debit: nominal, kredit: 0 },         // Kas/Bank Bertambah (Debit)
+      { kode_akun: akun_pendapatan, debit: 0, kredit: nominal }      // Pendapatan Bertambah (Kredit)
+    ]
+  });
+
+  return result;
+}
