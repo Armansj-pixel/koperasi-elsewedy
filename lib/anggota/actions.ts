@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 // =====================================================================
-// SCHEMAS (DIPERBARUI UNTUK WAJIB & SUKARELA)
+// SCHEMAS 
 // =====================================================================
 
 const AnggotaSchema = z.object({
@@ -367,7 +367,7 @@ export async function resetPasswordAnggota(id: string) {
 }
 
 // =====================================================================
-// GET KALKULASI RESIGN / TUTUP KEANGGOTAAN
+// GET KALKULASI RESIGN / TUTUP KEANGGOTAAN (SUDAH DINAMIS)
 // =====================================================================
 
 export async function getKalkulasiResign(userId: string) {
@@ -383,7 +383,7 @@ export async function getKalkulasiResign(userId: string) {
 
   if (!user) return { error: "Pengguna tidak ditemukan" };
 
-  // 2. Ambil Total Simpanan (Menyesuaikan dengan nama kolom DB Anda)
+  // 2. Ambil Total Simpanan
   const { data: simpanan } = await supabase
     .from('saldo_simpanan')
     .select('saldo_pokok, saldo_wajib, saldo_sukarela')
@@ -395,14 +395,42 @@ export async function getKalkulasiResign(userId: string) {
     (Number(simpanan?.saldo_wajib) || 0) + 
     (Number(simpanan?.saldo_sukarela) || 0);
 
-  // 3. Ambil Total Hutang Pinjaman Aktif
-  const { data: pinjamanAktif } = await supabase
+  // 3. Ambil Pinjaman Aktif
+  const { data: pinjamanAktifData } = await supabase
     .from('pinjaman')
-    .select('id, nomor_kontrak, sisa_pokok')
+    .select('id, nomor_kontrak, cicilan_per_bulan')
     .eq('user_id', userId)
     .eq('status', 'ACTIVE');
 
-  const totalHutangPinjaman = pinjamanAktif?.reduce((sum, p) => sum + (Number(p.sisa_pokok) || 0), 0) || 0;
+  let totalHutangPinjaman = 0;
+  const pinjamanAktif = [];
+
+  if (pinjamanAktifData && pinjamanAktifData.length > 0) {
+    for (const p of pinjamanAktifData) {
+      
+      // LOGIKA KUNCI: Tarik tagihan yang HANYA berstatus SCHEDULED / OVERDUE
+      const { data: cicilanBelumLunas, error: cicilanError } = await supabase
+        .from('cicilan_pinjaman')
+        .select('nominal_cicilan')
+        .eq('pinjaman_id', p.id)
+        .in('status', ['SCHEDULED', 'OVERDUE']);
+
+      if (!cicilanError && cicilanBelumLunas) {
+        // Jumlahkan nominal dari cicilan yang belum dibayar saja
+        const sisaHutang = cicilanBelumLunas.reduce((sum, c) => sum + Number(c.nominal_cicilan), 0);
+        
+        if (sisaHutang > 0) {
+          totalHutangPinjaman += sisaHutang;
+          pinjamanAktif.push({
+            id: p.id,
+            nomor_kontrak: p.nomor_kontrak,
+            sisa_pokok: sisaHutang, // <-- Inilah nilai real-time (bukan 15 juta lagi)
+            sisa_cicilan_kali: cicilanBelumLunas.length
+          });
+        }
+      }
+    }
+  }
 
   // 4. Kalkulasi Net Settlement (Clearance)
   const netKembalian = totalSimpanan - totalHutangPinjaman;
@@ -410,7 +438,7 @@ export async function getKalkulasiResign(userId: string) {
   return {
     user,
     simpanan: simpanan || { saldo_pokok: 0, saldo_wajib: 0, saldo_sukarela: 0 },
-    pinjamanAktif: pinjamanAktif || [],
+    pinjamanAktif,
     totalSimpanan,
     totalHutangPinjaman,
     netKembalian
@@ -475,6 +503,8 @@ export async function eksekusiTutupKeanggotaan(formData: FormData) {
       .from('pinjaman')
       .update({
         status: 'LUNAS',
+        sisa_pokok: 0,
+        sisa_cicilan: 0,
         tanggal_lunas: new Date().toISOString().split('T')[0],
         catatan_l3: `[AUTO-SETTLEMENT RESIGN] ${catatan}`,
         updated_at: new Date().toISOString()
