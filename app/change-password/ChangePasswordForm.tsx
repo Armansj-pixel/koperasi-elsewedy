@@ -53,36 +53,28 @@ export function ChangePasswordForm() {
 
   if (success) {
     return (
-      <div style={{ textAlign: "center", padding: "32px 0" }}>
+      <div style={{ textAlign: "center", padding: "40px 0" }}>
         <div style={{ 
-          display: "inline-flex", 
-          alignItems: "center", 
-          justifyContent: "center", 
-          width: "64px", 
-          height: "64px", 
-          borderRadius: "50%", 
-          backgroundColor: "#dcfce7", 
-          color: "#16a34a", 
-          marginBottom: "16px" 
+          display: "inline-flex", alignItems: "center", justifyContent: "center", 
+          width: "72px", height: "72px", borderRadius: "50%", 
+          background: "linear-gradient(135deg, #dcfce7, #bbf7d0)", 
+          color: "#16a34a", marginBottom: "20px",
+          boxShadow: "0 8px 16px rgba(22,163,74,0.15)"
         }}>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
         </div>
-        <h3 style={{ fontSize: "20px", fontWeight: "700", color: "#1e293b", margin: "0 0 8px 0" }}>
+        <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px 0", letterSpacing: "-.01em" }}>
           Password Berhasil Diubah!
         </h3>
-        <p style={{ fontSize: "14px", color: "#475569", margin: "0 0 16px 0" }}>
-          Mengarahkan ke dashboard...
+        <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 20px 0", fontWeight: "500" }}>
+          Mengarahkan Anda ke halaman Dashboard...
         </p>
         <div style={{
-          display: "inline-block",
-          width: "24px",
-          height: "24px",
-          border: "3px solid #bfdbfe",
-          borderTopColor: "#2563eb",
-          borderRadius: "50%",
-          animation: "spin 1s linear infinite"
+          display: "inline-block", width: "24px", height: "24px",
+          border: "3px solid #bfdbfe", borderTopColor: "#2563eb",
+          borderRadius: "50%", animation: "kop-spin 1s linear infinite"
         }}></div>
       </div>
     );
@@ -91,122 +83,73 @@ export function ChangePasswordForm() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: `
-        .fintech-input {
-          width: 100%;
-          padding: 12px 16px;
-          border-radius: 8px;
-          border: 1px solid #cbd5e1;
-          font-size: 14px;
-          transition: all 0.2s ease;
-          background-color: #fff;
-          color: #1e293b;
+        .kop-label {
+          display: block; font-size: 13px; font-weight: 700; color: #1e293b;
+          margin-bottom: 8px; letter-spacing: -.01em;
         }
 
-        .fintech-input-prefix {
-          padding-left: 42px;
-        }
+        .kop-input-wrapper { position: relative; }
         
-        .fintech-input-suffix {
-          padding-right: 48px;
+        .kop-input {
+          width: 100%; padding: 14px 44px; border-radius: 12px;
+          border: 1.5px solid #e2e8f0; font-size: 14px; font-weight: 600;
+          color: #0f172a; background: #fff; transition: all 0.2s ease;
+          font-family: inherit; letter-spacing: 1px;
         }
 
-        .fintech-input:focus {
-          outline: none;
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+        .kop-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,.15); }
+        .kop-input::placeholder { color: #94a3b8; font-weight: 400; letter-spacing: normal; }
+        .kop-input:disabled { background: #f8fafc; color: #94a3b8; cursor: not-allowed; border-color: #f1f5f9; }
+
+        .kop-input-icon {
+          position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+          color: #94a3b8; display: flex; pointer-events: none;
         }
 
-        .fintech-input:disabled {
-          background-color: #f8fafc;
-          color: #94a3b8;
-          cursor: not-allowed;
+        .kop-btn-toggle {
+          position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+          background: none; border: none; color: #94a3b8; cursor: pointer;
+          padding: 4px; display: flex; align-items: center; justify-content: center;
+          transition: color 0.2s; border-radius: 6px;
         }
+        .kop-btn-toggle:hover:not(:disabled) { color: #475569; background: #f1f5f9; }
 
-        .fintech-btn-toggle {
-          position: absolute;
-          right: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          background: none;
-          border: none;
-          color: #94a3b8;
-          cursor: pointer;
-          padding: 4px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: color 0.2s;
+        .kop-btn-submit {
+          width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+          background: linear-gradient(135deg, #1d4ed8, #1e40af); color: #fff; 
+          border: none; padding: 16px; border-radius: 14px; font-size: 14px; font-weight: 800; 
+          cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; font-family: inherit;
+          box-shadow: 0 4px 12px rgba(29,78,216,.2); margin-top: 8px;
         }
+        .kop-btn-submit:hover:not(:disabled) { box-shadow: 0 8px 20px rgba(29,78,216,.3); transform: translateY(-2px); }
+        .kop-btn-submit:active:not(:disabled) { transform: scale(0.97); }
+        .kop-btn-submit:disabled { opacity: 0.6; cursor: not-allowed; background: #94a3b8; box-shadow: none; transform: none; }
 
-        .fintech-btn-toggle:hover:not(:disabled) {
-          color: #475569;
+        .kop-spin {
+          width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.3);
+          border-top-color: currentColor; border-radius: 50%; animation: kop-spin .7s linear infinite;
         }
-
-        .fintech-btn-primary {
-          width: 100%;
-          background-color: #2563eb;
-          color: #fff;
-          border: none;
-          font-weight: 600;
-          padding: 14px;
-          border-radius: 8px;
-          text-align: center;
-          font-size: 14px;
-          transition: all 0.2s ease;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-        }
-        
-        .fintech-btn-primary:hover:not(:disabled) {
-          background-color: #1d4ed8;
-          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-        }
-
-        .fintech-btn-primary:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-          box-shadow: none;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        .spinner-icon {
-          display: inline-block;
-          width: 16px;
-          height: 16px;
-          border: 2px solid rgba(255,255,255,0.3);
-          border-top-color: #fff;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
+        @keyframes kop-spin { to { transform: rotate(360deg); } }
       `}} />
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
         
         {/* Error Alert */}
         {error && (
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: "12px 16px", borderRadius: "8px", display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "14px", fontWeight: "500" }}>
-            <svg style={{ flexShrink: 0, marginTop: "2px" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div style={{ background: "#fef2f2", border: "1.5px solid #fecaca", color: "#b91c1c", padding: "14px 16px", borderRadius: "12px", display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "13px", fontWeight: "600" }}>
+            <svg style={{ flexShrink: 0, marginTop: "1px" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <span>{error}</span>
           </div>
         )}
 
         {/* New Password */}
         <div>
-          <label
-            htmlFor="newPassword"
-            style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "8px" }}
-          >
+          <label htmlFor="newPassword" className="kop-label">
             Password Baru
           </label>
-          <div style={{ position: "relative" }}>
-            <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          <div className="kop-input-wrapper">
+            <span className="kop-input-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
             </span>
             <input
               id="newPassword"
@@ -217,7 +160,7 @@ export function ChangePasswordForm() {
               disabled={loading}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="fintech-input fintech-input-prefix fintech-input-suffix"
+              className="kop-input"
               autoComplete="new-password"
               minLength={8}
             />
@@ -225,69 +168,60 @@ export function ChangePasswordForm() {
               type="button"
               onClick={() => setShowNew(!showNew)}
               disabled={loading}
-              className="fintech-btn-toggle"
+              className="kop-btn-toggle"
+              tabIndex={-1}
             >
               {showNew ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               )}
             </button>
           </div>
 
           {/* Password Strength Bar */}
           {newPassword && (
-            <div style={{ marginTop: "12px" }}>
-              <div style={{ display: "flex", gap: "4px", marginBottom: "6px" }}>
+            <div style={{ marginTop: "12px", background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #f1f5f9" }}>
+              <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
                 {[0, 1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
                     style={{
-                      height: "6px",
-                      flex: 1,
-                      borderRadius: "4px",
-                      transition: "all 0.3s ease",
+                      height: "6px", flex: 1, borderRadius: "6px", transition: "all 0.3s ease",
                       backgroundColor: i < strength ? strengthColors[strength - 1] : "#e2e8f0",
                     }}
                   />
                 ))}
               </div>
-              <p
-                style={{
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  margin: 0,
-                  color: strengthColors[strength - 1] || "#64748b"
-                }}
-              >
-                {newPassword ? strengthLabels[strength] || "Sangat Lemah" : ""}
+              <p style={{ fontSize: "12px", fontWeight: "700", margin: 0, color: strengthColors[strength - 1] || "#64748b" }}>
+                Kekuatan: {newPassword ? strengthLabels[strength] || "Sangat Lemah" : ""}
               </p>
             </div>
           )}
 
           {/* Validation Hints */}
-          <div style={{ marginTop: "12px", display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "12px" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: "4px", color: newPassword.length >= 8 ? "#16a34a" : "#94a3b8", fontWeight: newPassword.length >= 8 ? "600" : "400" }}>
+          <div style={{ marginTop: "14px", display: "flex", flexWrap: "wrap", gap: "14px", fontSize: "12px" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: newPassword.length >= 8 ? "#15803d" : "#94a3b8", fontWeight: newPassword.length >= 8 ? "700" : "500", background: newPassword.length >= 8 ? "#dcfce7" : "transparent", padding: "4px 8px", borderRadius: "6px" }}>
               {newPassword.length >= 8 ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>
               )}
-              8+ karakter
+              8+ Karakter
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "4px", color: /[A-Z]/.test(newPassword) ? "#16a34a" : "#94a3b8", fontWeight: /[A-Z]/.test(newPassword) ? "600" : "400" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: /[A-Z]/.test(newPassword) ? "#15803d" : "#94a3b8", fontWeight: /[A-Z]/.test(newPassword) ? "700" : "500", background: /[A-Z]/.test(newPassword) ? "#dcfce7" : "transparent", padding: "4px 8px", borderRadius: "6px" }}>
               {/[A-Z]/.test(newPassword) ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>
               )}
-              Huruf besar
+              Huruf Besar
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "4px", color: /[0-9]/.test(newPassword) ? "#16a34a" : "#94a3b8", fontWeight: /[0-9]/.test(newPassword) ? "600" : "400" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: /[0-9]/.test(newPassword) ? "#15803d" : "#94a3b8", fontWeight: /[0-9]/.test(newPassword) ? "700" : "500", background: /[0-9]/.test(newPassword) ? "#dcfce7" : "transparent", padding: "4px 8px", borderRadius: "6px" }}>
               {/[0-9]/.test(newPassword) ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>
               )}
               Angka
             </span>
@@ -296,24 +230,21 @@ export function ChangePasswordForm() {
 
         {/* Confirm Password */}
         <div>
-          <label
-            htmlFor="confirmPassword"
-            style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#334155", marginBottom: "8px" }}
-          >
+          <label htmlFor="confirmPassword" className="kop-label">
             Konfirmasi Password Baru
           </label>
-          <div style={{ position: "relative" }}>
-            <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <div className="kop-input-wrapper">
+            <span className="kop-input-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </span>
             <input
               id="confirmPassword"
               name="confirmPassword"
               type={showConfirm ? "text" : "password"}
-              placeholder="Ketik ulang password baru"
+              placeholder="Ketik ulang password baru..."
               required
               disabled={loading}
-              className="fintech-input fintech-input-prefix fintech-input-suffix"
+              className="kop-input"
               autoComplete="new-password"
               minLength={8}
             />
@@ -321,12 +252,13 @@ export function ChangePasswordForm() {
               type="button"
               onClick={() => setShowConfirm(!showConfirm)}
               disabled={loading}
-              className="fintech-btn-toggle"
+              className="kop-btn-toggle"
+              tabIndex={-1}
             >
               {showConfirm ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               )}
             </button>
           </div>
@@ -336,17 +268,17 @@ export function ChangePasswordForm() {
         <button
           type="submit"
           disabled={loading || strength < 3}
-          className="fintech-btn-primary"
+          className="kop-btn-submit"
         >
           {loading ? (
             <>
-              <span className="spinner-icon"></span>
-              <span>Memproses...</span>
+              <span className="kop-spin"></span>
+              <span>Memproses Keamanan...</span>
             </>
           ) : (
             <>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <span>Ganti Password Sekarang</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>Simpan & Lanjutkan ke Dashboard</span>
             </>
           )}
         </button>
