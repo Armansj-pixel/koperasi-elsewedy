@@ -212,3 +212,75 @@ export async function catatPengeluaranOperasional(formData: FormData) {
 
   return result;
 }
+// =====================================================================
+// 3. GET LAPORAN JURNAL UMUM
+// =====================================================================
+
+export async function getJurnalUmum(limit = 100) {
+  await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
+  const supabase = createServiceClient();
+  
+  const { data, error } = await supabase
+    .from("jurnal_induk")
+    .select(`
+      id, nomor_bukti, tanggal_transaksi, keterangan, jenis_sumber, created_at,
+      jurnal_rincian (
+        id, debit, kredit,
+        akun_perkiraan ( kode_akun, nama_akun )
+      )
+    `)
+    .order("tanggal_transaksi", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return { data: data || [], error: error?.message };
+}
+
+// =====================================================================
+// 4. GET NERACA SALDO (TRIAL BALANCE)
+// =====================================================================
+
+export async function getNeracaSaldo() {
+  await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
+  const supabase = createServiceClient();
+
+  // 1. Ambil semua akun
+  const { data: accounts } = await supabase
+    .from("akun_perkiraan")
+    .select("*")
+    .order("kode_akun", { ascending: true });
+  
+  // 2. Ambil semua rincian transaksi yang pernah terjadi
+  const { data: rincian } = await supabase
+    .from("jurnal_rincian")
+    .select("akun_id, debit, kredit");
+
+  if (!accounts) return { data: [] };
+
+  // 3. Kalkulasi Saldo Akhir per Akun
+  const neraca = accounts.map(akun => {
+    const trxs = rincian?.filter(r => r.akun_id === akun.id) || [];
+    const totalDebit = trxs.reduce((sum, t) => sum + Number(t.debit), 0);
+    const totalKredit = trxs.reduce((sum, t) => sum + Number(t.kredit), 0);
+    
+    let saldo_akhir = 0;
+    if (akun.saldo_normal === 'DEBIT') {
+      saldo_akhir = totalDebit - totalKredit;
+    } else {
+      saldo_akhir = totalKredit - totalDebit;
+    }
+
+    return {
+      ...akun,
+      total_debit: totalDebit,
+      total_kredit: totalKredit,
+      saldo_akhir
+    };
+  });
+
+  // Filter hanya akun yang pernah ada transaksinya (saldo tidak 0)
+  const activeNeraca = neraca.filter(n => n.total_debit > 0 || n.total_kredit > 0 || n.saldo_akhir !== 0);
+
+  return { data: activeNeraca };
+}
+
