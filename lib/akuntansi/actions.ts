@@ -126,3 +126,86 @@ export async function getChartOfAccounts() {
 
   return { data: data || [], error: error?.message || null };
 }
+// =====================================================================
+// 1. ACTION: TOP-UP KAS KECIL (TARIK TUNAI DARI BANK)
+// =====================================================================
+
+const TopUpSchema = z.object({
+  nominal: z.coerce.number().min(1000, "Minimal tarik tunai Rp 1.000"),
+  sumber_bank: z.string().min(1, "Sumber bank wajib dipilih"), // Contoh: '102-MND'
+  tanggal: z.string(),
+  keterangan: z.string().optional()
+});
+
+export async function topUpKasKecil(formData: FormData) {
+  const session = await requireRole(["BENDAHARA", "SUPERADMIN"]);
+  
+  const raw = {
+    nominal: formData.get("nominal"),
+    sumber_bank: formData.get("sumber_bank") as string || "102-MND",
+    tanggal: (formData.get("tanggal") as string) || new Date().toISOString().split("T")[0],
+    keterangan: formData.get("keterangan") as string || "Tarik tunai untuk pengisian Kas Kecil"
+  };
+
+  const parsed = TopUpSchema.safeParse(raw);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+
+  const { nominal, sumber_bank, tanggal, keterangan } = parsed.data;
+
+  // Panggil Core Engine Jurnal
+  const result = await buatJurnalUmum({
+    nomor_bukti: `CASHTOPUP-${Date.now()}`,
+    tanggal_transaksi: tanggal,
+    keterangan: keterangan,
+    jenis_sumber: 'MANUAL',
+    lines: [
+      { kode_akun: '101', debit: nominal, kredit: 0 },         // Kas Tunai Bertambah
+      { kode_akun: sumber_bank, debit: 0, kredit: nominal }    // Saldo Bank Berkurang
+    ]
+  });
+
+  return result;
+}
+
+// =====================================================================
+// 2. ACTION: PENGELUARAN BIAYA OPERASIONAL
+// =====================================================================
+
+const PengeluaranSchema = z.object({
+  nominal: z.coerce.number().min(500, "Minimal pengeluaran Rp 500"),
+  akun_biaya: z.string().min(1, "Jenis biaya wajib dipilih"), // Contoh: '501', '504', '505'
+  sumber_dana: z.enum(['101', '102-MND', '102-MAY', '102-BRIS']), // Pakai kas tunai atau transfer bank?
+  tanggal: z.string(),
+  keterangan: z.string().min(3, "Keterangan pengeluaran wajib diisi")
+});
+
+export async function catatPengeluaranOperasional(formData: FormData) {
+  const session = await requireRole(["BENDAHARA", "SUPERADMIN"]);
+  
+  const raw = {
+    nominal: formData.get("nominal"),
+    akun_biaya: formData.get("akun_biaya") as string,
+    sumber_dana: formData.get("sumber_dana") as string || "101", // Default pakai uang laci (Kas Tunai)
+    tanggal: (formData.get("tanggal") as string) || new Date().toISOString().split("T")[0],
+    keterangan: formData.get("keterangan") as string
+  };
+
+  const parsed = PengeluaranSchema.safeParse(raw);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+
+  const { nominal, akun_biaya, sumber_dana, tanggal, keterangan } = parsed.data;
+
+  // Panggil Core Engine Jurnal
+  const result = await buatJurnalUmum({
+    nomor_bukti: `EXP-${Date.now()}`,
+    tanggal_transaksi: tanggal,
+    keterangan: keterangan,
+    jenis_sumber: 'MANUAL',
+    lines: [
+      { kode_akun: akun_biaya, debit: nominal, kredit: 0 },      // Biaya Bertambah (Debit)
+      { kode_akun: sumber_dana, debit: 0, kredit: nominal }      // Harta Berkurang (Kredit)
+    ]
+  });
+
+  return result;
+}
