@@ -4,9 +4,6 @@ import React, { useState, useTransition } from "react";
 import Link from "next/link";
 import { ajukanPinjaman } from "@/lib/pinjaman/actions";
 
-// 1. KUNCI TENOR: Hanya sampai 12 bulan
-const TENOR_OPTIONS = [3, 6, 9, 12];
-
 function formatRupiah(n: number) {
   return "Rp " + Number(n).toLocaleString("id-ID");
 }
@@ -29,7 +26,7 @@ export default function AjukanPinjamanForm({
   function handleNominalChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value.replace(/\D/g, "");
     const val = parseInt(raw) || 0;
-    // 2. KUNCI INPUT: Otomatis tertahan di angka 15.000.000 kalau ngetik lebih
+    // KUNCI INPUT: Otomatis tertahan di angka 15.000.000 kalau ngetik lebih
     setNominal(Math.min(val, 15000000));
   }
 
@@ -66,7 +63,7 @@ export default function AjukanPinjamanForm({
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         
-        {/* DROPDOWN ANGGOTA (KHUSUS OVERRIDE BENDAHARA) */}
+        {/* DROPDOWN ANGGOTA (KHUSUS OVERRIDE PENGURUS) */}
         {canOverride && (
           <div style={{ background: "#fff1f2", border: "1.5px solid #fecaca", padding: "16px", borderRadius: "14px" }}>
             <label className="kop-label" style={{ color: "#991b1b" }}>
@@ -110,7 +107,7 @@ export default function AjukanPinjamanForm({
             Minimal Rp 100.000 — Maksimal Rp 15.000.000
           </p>
 
-          {/* 3. KUNCI QUICK SELECT */}
+          {/* QUICK SELECT NOMINAL */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px" }}>
             {[1000000, 2000000, 5000000, 10000000, 15000000].map((v) => (
               <button
@@ -129,32 +126,30 @@ export default function AjukanPinjamanForm({
           </div>
         </div>
 
-        {/* Tenor */}
+        {/* Tenor (DIUBAH MENJADI DROPDOWN 1-12 BULAN) */}
         <div>
           <label className="kop-label">
             Tenor Angsuran <span className="kop-req">*</span>
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
-            {TENOR_OPTIONS.map((t) => {
-              const active = tenor === t;
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTenor(t)}
-                  style={{
-                    padding: "12px 0", fontSize: "14px", fontWeight: "800", borderRadius: "12px",
-                    border: active ? "1.5px solid #2563eb" : "1.5px solid #e2e8f0",
-                    background: active ? "#eff6ff" : "#fff", color: active ? "#1d4ed8" : "#64748b",
-                    cursor: "pointer", transition: "all 0.15s", boxShadow: active ? "0 2px 8px rgba(37,99,235,0.1)" : "none"
-                  }}
-                >
-                  {t} Bulan
-                </button>
-              );
-            })}
-          </div>
-          <input type="hidden" name="tenor_bulan" value={tenor} />
+          <select
+            name="tenor_bulan"
+            value={tenor}
+            onChange={(e) => setTenor(Number(e.target.value))}
+            className="kop-select"
+            required
+            style={{ 
+              WebkitAppearance: "none", MozAppearance: "none", appearance: "none", 
+              backgroundImage: "url(\"data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E\")", 
+              backgroundRepeat: "no-repeat", backgroundPosition: "right 16px top 50%", backgroundSize: "10px auto" 
+            }}
+          >
+            {/* Generate otomatis opsi 1 sampai 12 */}
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((t) => (
+              <option key={t} value={t}>
+                {t} Bulan
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Ringkasan Kalkulasi */}
