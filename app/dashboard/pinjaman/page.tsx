@@ -54,7 +54,6 @@ export default async function PinjamanPage({
   const roleIsPengurus = ["SUPERADMIN", "SEKRETARIS", "BENDAHARA", "KETUA"].includes(currentUser.role);
   const isBendahara = currentUser.role === "BENDAHARA";
   
-  // Jika role pengurus TAPI tidak ada parameter view=personal, maka tampilkan halaman Admin
   const isPengurusView = roleIsPengurus && viewParam !== "personal";
 
   const { data: pinjamanList } = await getPinjamanList({
@@ -138,12 +137,6 @@ export default async function PinjamanPage({
               <span>{searchParams.success}</span>
             </div>
           )}
-          {searchParams.error && (
-            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: "14px 16px", borderRadius: "14px", marginBottom: "20px", fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px" }}>
-              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>{searchParams.error}</span>
-            </div>
-          )}
 
           {isPengurusView && stats && (
             <div className="kop-stats-grid">
@@ -160,8 +153,8 @@ export default async function PinjamanPage({
                 <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>Pending Verifikasi</div>
               </div>
               <div className="kop-card" style={{ padding: "20px", textAlign: "center", margin: 0 }}>
-                <div style={{ fontSize: "18px", fontWeight: "900", color: "#1d4ed8", marginTop: "8px" }}>{formatRupiah(stats.totalOutstanding ?? 0)}</div>
-                <div style={{ fontSize: "11px", color: "#64748b", marginTop: "8px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>Sisa Outstanding</div>
+                <div style={{ fontSize: "18px", fontWeight: "900", color: "#e11d48", marginTop: "8px" }}>{formatRupiah(stats.totalOutstanding ?? 0)}</div>
+                <div style={{ fontSize: "11px", color: "#f43f5e", marginTop: "8px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total Real Outstanding</div>
               </div>
             </div>
           )}
@@ -179,7 +172,6 @@ export default async function PinjamanPage({
             <div className="kop-card" style={{ textAlign: "center", padding: "64px 20px" }}>
               <svg style={{ margin: "0 auto 16px auto", display: "block", color: "#cbd5e1" }} width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
               <div style={{ color: "#475569", fontWeight: 700, fontSize: "16px" }}>Belum ada data pinjaman</div>
-              <div style={{ color: "#94a3b8", fontSize: "13px", marginTop: "4px" }}>Pengajuan pinjaman yang dibuat akan muncul di sini.</div>
               {!isPengurusView && (
                 <Link href="/dashboard/pinjaman/ajukan?view=personal" style={{ background: "#f1f5f9", color: "#1d4ed8", padding: "10px 20px", borderRadius: "12px", fontSize: "13px", fontWeight: "700", marginTop: "20px", display: "inline-block", textDecoration: "none" }}>Ajukan pinjaman sekarang →</Link>
               )}
@@ -188,24 +180,48 @@ export default async function PinjamanPage({
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               {pinjamanList.map((p: any) => {
                 const statusInfo = STATUS_LABEL[p.status] ?? { label: p.status, bg: "#f1f5f9", color: "#64748b", border: "1px solid #e2e8f0" };
+                
                 return (
                   <Link key={p.id} href={`/dashboard/pinjaman/${p.id}${!isPengurusView ? '?view=personal' : ''}`} className="kop-pinjaman-card">
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
                       <div>
                         {isPengurusView && (
-                          <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "6px", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                             {p.user_nama} <span style={{ color: "#cbd5e1" }}>|</span> NIK: {p.user_nik}
                           </div>
                         )}
-                        <div style={{ fontSize: "20px", fontWeight: "900", color: "#0f172a", letterSpacing: "-.02em" }}>{formatRupiah(p.nominal)}</div>
+                        
+                        {/* TAMPILAN SISA OUTSTANDING UNTUK PINJAMAN AKTIF */}
+                        {p.status === 'ACTIVE' ? (
+                          <>
+                            <div style={{ fontSize: "20px", fontWeight: "900", color: "#e11d48", letterSpacing: "-.02em" }}>
+                              {formatRupiah(p.sisa_outstanding)}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#f43f5e", fontWeight: "700", marginTop: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                              Sisa Hutang ({p.sisa_cicilan_kali}x Cicilan)
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: "20px", fontWeight: "900", color: "#0f172a", letterSpacing: "-.02em" }}>
+                              {formatRupiah(p.nominal)}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#64748b", fontWeight: "700", marginTop: "4px" }}>
+                              Plafon Pinjaman Awal
+                            </div>
+                          </>
+                        )}
+                        
                       </div>
                       <span style={{ background: statusInfo.bg, color: statusInfo.color, border: statusInfo.border, padding: "6px 12px", borderRadius: "20px", fontSize: "10px", fontWeight: "800", textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap" }}>{statusInfo.label}</span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", color: "#64748b", fontWeight: 600 }}>
+                    
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", color: "#64748b", fontWeight: 600, borderTop: "1px dashed #e2e8f0", paddingTop: "12px", marginTop: "12px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        {p.tenor_bulan} Bulan <span style={{ color: "#cbd5e1" }}>|</span> {formatRupiah(p.cicilan_per_bulan)}/bln
+                        {p.tenor_bulan} Bln <span style={{ color: "#cbd5e1" }}>|</span> {formatRupiah(p.cicilan_per_bulan)}/bln
                       </div>
                       <span>{new Date(p.tanggal_pengajuan).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
                     </div>
