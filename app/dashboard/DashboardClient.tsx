@@ -101,8 +101,8 @@ const modules: Module[] = [
   {
     icon: "📒",
     label: "Kas Kecil",
-    href: "#",
-    isActive: false,
+    href: "/dashboard/kas",
+    isActive: true,
     bg: "#ccfbf1",
     iconColor: "#0f766e",
     desc: "Arus kas harian",
@@ -121,12 +121,12 @@ const modules: Module[] = [
   {
     icon: "📚",
     label: "Akuntansi",
-    href: "#",
-    isActive: false,
+    href: "/dashboard/akuntansi",
+    isActive: true,
     bg: "#e0e7ff",
     iconColor: "#4338ca",
     desc: "Pembukuan",
-    allowedRoles: ["SUPERADMIN", "BENDAHARA"],
+    allowedRoles: ["SUPERADMIN", "BENDAHARA", "SEKRETARIS", "KETUA"],
   },
   {
     icon: "🩺",
