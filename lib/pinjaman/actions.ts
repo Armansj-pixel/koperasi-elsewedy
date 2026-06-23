@@ -77,6 +77,8 @@ export interface PinjamanWithUser extends Partial<Pinjaman> {
   nominal: number
   total_diterima: number
   tanggal_pencairan: string | null
+  sisa_cicilan_kali?: number    // Ditambahkan untuk UI Sisa Hutang
+  sisa_outstanding?: number     // Ditambahkan untuk UI Sisa Hutang
 }
 
 // ─── Kalkulasi ────────────────────────────────────────────────────────────────
@@ -135,7 +137,7 @@ function generateJadwalCicilan(
   return cicilan
 }
 
-// ─── GET: List Pinjaman ───────────────────────────────────────────────────────
+// ─── GET: List Pinjaman (DIPERBARUI UNTUK SISA HUTANG REAL) ───────────────────
 
 export async function getPinjamanList(filter?: {
   status?: PinjamanStatus
@@ -163,14 +165,34 @@ export async function getPinjamanList(filter?: {
 
   const userMap = new Map(users?.map((u) => [u.id, u]) ?? [])
 
-  const result: PinjamanWithUser[] = (pinjaman ?? []).map((p) => ({
-    ...p,
-    nominal: p.nominal_pokok, 
-    total_diterima: p.nominal_diterima, 
-    tanggal_pencairan: p.tanggal_cair, 
-    user_nama: userMap.get(p.user_id)?.nama ?? 'Unknown',
-    user_nik: userMap.get(p.user_id)?.nik ?? '-',
-  }))
+  // Cari semua tagihan cicilan yang belum dibayar untuk menghitung Sisa Hutang Real
+  const { data: unpaid } = await supabase
+    .from('cicilan_pinjaman')
+    .select('pinjaman_id')
+    .in('status', ['SCHEDULED', 'OVERDUE']);
+    
+  const countMap: Record<number, number> = {};
+  if (unpaid) {
+    unpaid.forEach((c) => {
+      countMap[c.pinjaman_id] = (countMap[c.pinjaman_id] || 0) + 1;
+    });
+  }
+
+  const result: PinjamanWithUser[] = (pinjaman ?? []).map((p) => {
+    const sisaKali = countMap[p.id] || 0;
+    const sisaOutstanding = p.status === 'ACTIVE' ? sisaKali * (Number(p.cicilan_per_bulan) || 0) : 0;
+
+    return {
+      ...p,
+      nominal: p.nominal_pokok, 
+      total_diterima: p.nominal_diterima, 
+      tanggal_pencairan: p.tanggal_cair, 
+      user_nama: userMap.get(p.user_id)?.nama ?? 'Unknown',
+      user_nik: userMap.get(p.user_id)?.nik ?? '-',
+      sisa_cicilan_kali: sisaKali,
+      sisa_outstanding: sisaOutstanding
+    };
+  })
 
   return { data: result, error: null }
 }
@@ -730,16 +752,29 @@ export async function inputPinjamanExisting(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjaman.id}?success=${encodeURIComponent('Data pinjaman existing berhasil diinput')}`)
 }
 
-// ─── GET: Statistik Pinjaman ──────────────────────────────────────────────────
+// ─── GET: Statistik Pinjaman (DIPERBARUI UNTUK SISA HUTANG REAL) ──────────────
 
 export async function getStatistikPinjaman() {
   const supabase = await createClient()
 
   const { data: pinjaman } = await supabase
     .from('pinjaman')
-    .select('nominal_pokok, status, cicilan_per_bulan')
+    .select('id, nominal_pokok, status, cicilan_per_bulan')
 
-  if (!pinjaman) return { total: 0, aktif: 0, pending: 0, lunas: 0, totalOutstanding: 0 }
+  if (!pinjaman) return { total: 0, aktif: 0, pending: 0, lunas: 0, totalOutstanding: 0, totalCicilanBulanan: 0 }
+
+  // Ambil data cicilan yang belum dibayar untuk menghitung Sisa Hutang Real
+  const { data: unpaid } = await supabase
+    .from('cicilan_pinjaman')
+    .select('pinjaman_id')
+    .in('status', ['SCHEDULED', 'OVERDUE']);
+    
+  const countMap: Record<number, number> = {};
+  if (unpaid) {
+    unpaid.forEach((c) => {
+      countMap[c.pinjaman_id] = (countMap[c.pinjaman_id] || 0) + 1;
+    });
+  }
 
   const aktif = pinjaman.filter((p) => p.status === 'ACTIVE')
   const pending = pinjaman.filter((p) =>
@@ -747,12 +782,18 @@ export async function getStatistikPinjaman() {
   )
   const lunas = pinjaman.filter((p) => p.status === 'LUNAS')
 
+  // Total Outstanding sekarang dihitung berdasarkan (Sisa Kali Cicilan) x (Cicilan Per Bulan)
+  const totalOutstanding = aktif.reduce((sum, p) => {
+    const sisaKali = countMap[p.id] || 0;
+    return sum + (sisaKali * (Number(p.cicilan_per_bulan) || 0));
+  }, 0);
+
   return {
     total: pinjaman.length,
     aktif: aktif.length,
     pending: pending.length,
     lunas: lunas.length,
-    totalOutstanding: aktif.reduce((sum, p) => sum + (p.nominal_pokok ?? 0), 0),
+    totalOutstanding,
     totalCicilanBulanan: aktif.reduce((sum, p) => sum + (p.cicilan_per_bulan ?? 0), 0),
   }
 }
@@ -781,38 +822,4 @@ export async function potongCicilanMassal(bulan: number, tahun: number) {
 
   // 1. Eksekusi pelunasan massal semua cicilan di bulan tersebut
   const { error: updateError } = await supabase
-    .from('cicilan_pinjaman')
-    .update({
-      status: 'PAID',
-      tanggal_pembayaran: new Date().toISOString().split('T')[0]
-    })
-    .in('id', cicilanIds)
-
-  if (updateError) return { success: false, message: "Gagal memproses pembayaran massal." }
-
-  // 2. Scan & rekonsiliasi otomatis status pinjaman utama yang sudah selesai angsurannya
-  const pinjamanIds = [...new Set(cicilanTertarget.map(c => c.pinjaman_id))]
-
-  for (const pId of pinjamanIds) {
-    const { data: cekCicilan } = await supabase
-      .from('cicilan_pinjaman')
-      .select('status')
-      .eq('pinjaman_id', pId)
-
-    const semuaLunas = cekCicilan?.every(c => c.status === 'PAID' || c.status === 'WAIVED')
-    
-    if (semuaLunas) {
-      await supabase
-        .from('pinjaman')
-        .update({ 
-          status: 'LUNAS', 
-          tanggal_lunas: new Date().toISOString().split('T')[0],
-          updated_at: new Date().toISOString() 
-        })
-        .eq('id', pId)
-    }
-  }
-
-  revalidatePath('/dashboard/pinjaman')
-  return { success: true, message: `Berhasil memproses payroll pinjaman! ${cicilanTertarget.length} tagihan angsuran periode ${targetMonthStr} telah dibayarkan secara massal.` }
-}
+    .from
