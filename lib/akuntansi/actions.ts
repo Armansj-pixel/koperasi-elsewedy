@@ -127,7 +127,7 @@ export async function getChartOfAccounts() {
 
   return { data: data || [], error: error?.message || null };
 }
-// =====================================================================
+// ==// =====================================================================
 // 1. ACTION: TOP-UP KAS KECIL (TARIK TUNAI DARI BANK)
 // =====================================================================
 
@@ -135,7 +135,7 @@ const TopUpSchema = z.object({
   nominal: z.coerce.number().min(1000, "Minimal tarik tunai Rp 1.000"),
   sumber_bank: z.string().min(1, "Sumber bank wajib dipilih"), // Contoh: '102-MND'
   tanggal: z.string(),
-  keterangan: z.string().optional()
+  keterangan: z.string().optional() // TypeScript menganggap ini bisa 'undefined'
 });
 
 export async function topUpKasKecil(formData: FormData) {
@@ -157,7 +157,8 @@ export async function topUpKasKecil(formData: FormData) {
   const result = await buatJurnalUmum({
     nomor_bukti: `CASHTOPUP-${Date.now()}`,
     tanggal_transaksi: tanggal,
-    keterangan: keterangan,
+    // PERBAIKAN DI SINI: Kita beri nilai default jika keterangan undefined
+    keterangan: keterangan || "Tarik tunai untuk pengisian Kas Kecil", 
     jenis_sumber: 'MANUAL',
     lines: [
       { kode_akun: '101', debit: nominal, kredit: 0 },         // Kas Tunai Bertambah
@@ -167,6 +168,7 @@ export async function topUpKasKecil(formData: FormData) {
 
   return result;
 }
+
 
 // =====================================================================
 // 2. ACTION: PENGELUARAN BIAYA OPERASIONAL
