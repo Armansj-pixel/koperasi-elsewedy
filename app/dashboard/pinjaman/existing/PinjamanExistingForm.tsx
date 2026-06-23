@@ -21,10 +21,10 @@ function formatRupiah(n: number) {
 export default function PinjamanExistingForm({ anggotaList }: PinjamanExistingFormProps) {
   const [isPending, startTransition] = useTransition();
   const [nominal, setNominal] = useState(0);
-  
-  // Tenor default diubah jadi 12 bulan sesuai aturan baru
-  const [tenor, setTenor] = useState(12); 
+  const [tenor, setTenor] = useState(12);
   const [cicilanTerbayar, setCicilanTerbayar] = useState(0);
+  
+  // Search State
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<Anggota | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -44,6 +44,15 @@ export default function PinjamanExistingForm({ anggotaList }: PinjamanExistingFo
     })
     .slice(0, 8); // Tampilkan maksimal 8 teratas biar rapi
 
+  function handleTenorChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const newTenor = Number(e.target.value);
+    setTenor(newTenor);
+    // Pastikan cicilan terbayar tidak lebih dari tenor yang baru dipilih
+    if (cicilanTerbayar > newTenor) {
+      setCicilanTerbayar(newTenor);
+    }
+  }
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -51,267 +60,247 @@ export default function PinjamanExistingForm({ anggotaList }: PinjamanExistingFo
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      {/* Pilih Anggota */}
-      <div style={{ marginBottom: "20px", position: "relative" }}>
-        <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#1e293b", marginBottom: "8px" }}>
-          Anggota <span style={{ color: "#dc2626" }}>*</span>
-        </label>
-        {selectedUser ? (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "14px 16px",
-              border: "1px solid #bbf7d0",
-              borderRadius: "12px",
-              background: "#f0fdf4",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: "600", color: "#1e293b" }}>{selectedUser.nama}</div>
-              <div style={{ fontSize: "12px", color: "#64748b" }}>NIK: {selectedUser.nik}</div>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .kop-label { display: block; font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 8px; letter-spacing: -.01em; }
+        .kop-req { color: #dc2626; margin-left: 2px; }
+        .kop-input, .kop-select { width: 100%; padding: 14px 16px; border-radius: 12px; border: 1.5px solid #e2e8f0; font-size: 14px; font-weight: 600; color: #0f172a; background: #fff; transition: all 0.2s ease; font-family: inherit; }
+        .kop-input:focus, .kop-select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,.15); }
+        .kop-input::placeholder { color: #94a3b8; font-weight: 400; }
+        
+        .kop-input-curr { position: relative; }
+        .kop-input-curr::before { content: 'Rp'; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 15px; font-weight: 800; color: #64748b; pointer-events: none; }
+        .kop-input-curr .kop-input { padding-left: 46px; font-weight: 800; font-size: 16px; }
+        
+        .kop-btn-submit { flex: 2; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #0f172a, #1e293b); color: #fff; border: none; padding: 16px; border-radius: 14px; font-size: 14px; font-weight: 800; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; font-family: inherit; box-shadow: 0 4px 12px rgba(15,23,42,.2); }
+        .kop-btn-submit:hover:not(:disabled) { box-shadow: 0 8px 20px rgba(15,23,42,.3); transform: translateY(-2px); }
+        .kop-btn-submit:active:not(:disabled) { transform: scale(0.97); }
+        .kop-btn-submit:disabled { opacity: 0.6; cursor: not-allowed; background: #94a3b8; box-shadow: none; transform: none; }
+        
+        .kop-btn-cancel { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; background: #f1f5f9; color: #475569; border: none; padding: 16px; border-radius: 14px; font-size: 14px; font-weight: 800; cursor: pointer; transition: background 0.15s; font-family: inherit; text-decoration: none; }
+        .kop-btn-cancel:hover:not(:disabled) { background: #e2e8f0; }
+        
+        .kop-spin { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: kop-spin .7s linear infinite; }
+        @keyframes kop-spin { to { transform: rotate(360deg); } }
+      `}} />
+
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        
+        {/* Pilih Anggota */}
+        <div style={{ position: "relative" }}>
+          <label className="kop-label">
+            Anggota <span className="kop-req">*</span>
+          </label>
+          {selectedUser ? (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", border: "1.5px solid #bbf7d0", borderRadius: "12px", background: "#f0fdf4" }}>
+              <div>
+                <div style={{ fontSize: "14px", fontWeight: "800", color: "#166534" }}>{selectedUser.nama}</div>
+                <div style={{ fontSize: "12px", color: "#15803d", fontWeight: "600", marginTop: "2px" }}>NIK: {selectedUser.nik}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSelectedUser(null); setSearch(""); setTimeout(() => setShowDropdown(true), 100); }}
+                style={{ fontSize: "12px", fontWeight: "800", color: "#15803d", background: "#dcfce7", border: "none", cursor: "pointer", padding: "6px 12px", borderRadius: "8px" }}
+              >
+                Ubah
+              </button>
+              <input type="hidden" name="user_id" value={selectedUser.id} />
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedUser(null);
-                setSearch("");
-                setTimeout(() => setShowDropdown(true), 100);
-              }}
-              style={{ fontSize: "12px", color: "#94a3b8", background: "none", border: "none", cursor: "pointer", padding: "4px 8px" }}
-            >
-              Ganti
-            </button>
-            <input type="hidden" name="user_id" value={selectedUser.id} />
-          </div>
-        ) : (
-          <div style={{ position: "relative" }}>
+          ) : (
+            <div style={{ position: "relative" }}>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
+                onFocus={() => setShowDropdown(true)}
+                onBlur={() => setShowDropdown(false)}
+                placeholder="Ketik 2 huruf nama atau NIK anggota..."
+                className="kop-input"
+                autoComplete="off"
+              />
+              
+              {showDropdown && (
+                <div style={{ position: "absolute", zIndex: 50, width: "100%", marginTop: "8px", background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: "14px", boxShadow: "0 10px 25px rgba(15,45,107,.1)", maxHeight: "240px", overflowY: "auto" }}>
+                  {filtered.length === 0 ? (
+                    <div style={{ padding: "16px", fontSize: "13px", color: "#94a3b8", textAlign: "center", fontWeight: "600" }}>
+                      {anggotaList.length === 0 ? "Data anggota kosong" : "Pencarian tidak ditemukan"}
+                    </div>
+                  ) : (
+                    filtered.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); setSelectedUser(a); setShowDropdown(false); setSearch(""); }}
+                        style={{ width: "100%", textAlign: "left", padding: "14px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", transition: "background 0.2s ease" }}
+                        onMouseOver={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                        onMouseOut={(e) => (e.currentTarget.style.background = "none")}
+                      >
+                        <div style={{ fontWeight: "700", color: "#0f172a", fontSize: "14px" }}>{a.nama || "Tanpa Nama"}</div>
+                        <div style={{ color: "#64748b", fontSize: "12px", marginTop: "4px", fontWeight: "600" }}>NIK: <span style={{ fontFamily: "monospace", color: "#475569" }}>{a.nik || "-"}</span></div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Nominal */}
+        <div>
+          <label className="kop-label">
+            Nominal Pinjaman Kotor <span className="kop-req">*</span>
+          </label>
+          <div className="kop-input-curr">
             <input
               type="text"
-              value={search}
+              inputMode="numeric"
+              value={nominal > 0 ? nominal.toLocaleString("id-ID") : ""}
               onChange={(e) => {
-                setSearch(e.target.value);
-                setShowDropdown(true);
+                const val = parseInt(e.target.value.replace(/\D/g, "")) || 0;
+                setNominal(Math.min(val, 15000000)); // Limit 15 Juta
               }}
-              onFocus={() => setShowDropdown(true)}
-              onBlur={() => setShowDropdown(false)} // Otomatis tutup kalau ngeklik di luar form
-              placeholder="Ketik 2 huruf nama atau NIK..."
-              className="fintech-input"
-              autoComplete="off"
+              placeholder="0"
+              className="kop-input"
+              required
             />
-            
-            {showDropdown && (
-              <div
+            <input type="hidden" name="nominal" value={nominal} />
+          </div>
+          
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px" }}>
+            {[1000000, 3000000, 5000000, 10000000, 15000000].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setNominal(v)}
                 style={{
-                  position: "absolute",
-                  zIndex: 50,
-                  width: "100%",
-                  marginTop: "4px",
-                  background: "#fff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "12px",
-                  boxShadow: "0 10px 25px rgba(15,45,107,.15)",
-                  maxHeight: "220px",
-                  overflowY: "auto",
+                  padding: "8px 16px", fontSize: "11px", fontWeight: "800", background: nominal === v ? "#0f172a" : "#f8fafc",
+                  color: nominal === v ? "#fff" : "#475569", border: `1.5px solid ${nominal === v ? "#0f172a" : "#e2e8f0"}`,
+                  borderRadius: "20px", cursor: "pointer", transition: "all 0.15s"
                 }}
               >
-                {filtered.length === 0 ? (
-                  <div style={{ padding: "12px 16px", fontSize: "14px", color: "#94a3b8", textAlign: "center" }}>
-                    {anggotaList.length === 0 ? "Data anggota kosong" : "Tidak ada yang cocok"}
-                  </div>
-                ) : (
-                  filtered.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      // Gunakan onMouseDown agar event klik ditangkap SEBELUM input kehilangan fokus (onBlur)
-                      onMouseDown={(e) => {
-                        e.preventDefault(); 
-                        setSelectedUser(a);
-                        setShowDropdown(false);
-                        setSearch("");
-                      }}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "12px 16px",
-                        fontSize: "14px",
-                        background: "none",
-                        border: "none",
-                        borderBottom: "1px solid #f1f5f9",
-                        cursor: "pointer",
-                        transition: "background 0.2s ease"
-                      }}
-                      onMouseOver={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                      onMouseOut={(e) => (e.currentTarget.style.background = "none")}
-                    >
-                      <div style={{ fontWeight: "600", color: "#1e293b" }}>{a.nama || "Tanpa Nama"}</div>
-                      <div style={{ color: "#64748b", fontSize: "12px", marginTop: "2px" }}>NIK: {a.nik || "-"}</div>
-                    </button>
-                  ))
-                )}
+                {formatRupiah(v)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+          {/* Tenor Dropdown */}
+          <div>
+            <label className="kop-label">Tenor <span className="kop-req">*</span></label>
+            <select
+              name="tenor_bulan"
+              value={tenor}
+              onChange={handleTenorChange}
+              className="kop-select"
+              required
+              style={{ WebkitAppearance: "none", MozAppearance: "none", appearance: "none", backgroundImage: "url(\"data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 16px top 50%", backgroundSize: "10px auto" }}
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((t) => (
+                <option key={t} value={t}>{t} Bulan</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Cicilan Terbayar Dropdown */}
+          <div>
+            <label className="kop-label">Sdh Dibayar <span className="kop-req">*</span></label>
+            <select
+              name="cicilan_terbayar"
+              value={cicilanTerbayar}
+              onChange={(e) => setCicilanTerbayar(Number(e.target.value))}
+              className="kop-select"
+              required
+              style={{ WebkitAppearance: "none", MozAppearance: "none", appearance: "none", backgroundImage: "url(\"data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 16px top 50%", backgroundSize: "10px auto" }}
+            >
+              {Array.from({ length: tenor + 1 }, (_, i) => i).map((t) => (
+                <option key={t} value={t}>{t} Kali</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Tanggal pencairan */}
+        <div>
+          <label className="kop-label">
+            Tanggal Pencairan Asli <span className="kop-req">*</span>
+          </label>
+          <input 
+            type="date" 
+            name="tanggal_pencairan" 
+            className="kop-input" 
+            required 
+            style={{ color: "#0f172a" }}
+          />
+          <p style={{ fontSize: "11px", color: "#64748b", marginTop: "8px", fontWeight: "600", lineHeight: "1.5" }}>
+            * Tanggal awal pencairan pinjaman ini di sistem lama (digunakan untuk acuan penjatuhan tempo cicilan sisa).
+          </p>
+        </div>
+
+        {/* Ringkasan */}
+        {nominal > 0 && tenor > 0 && (
+          <div style={{ background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "16px", padding: "20px" }}>
+            <div style={{ fontWeight: "800", fontSize: "14px", color: "#0f172a", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
+              Review Data Migrasi
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "10px", fontWeight: "600", color: "#475569" }}>
+              <span>Total Nominal</span>
+              <span style={{ color: "#1e293b" }}>{formatRupiah(nominal)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "12px", fontWeight: "600", color: "#dc2626" }}>
+              <span>Biaya admin kotor (4%)</span>
+              <span>- {formatRupiah(biayaAdmin)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "12px", fontWeight: "600", color: "#475569" }}>
+              <span>Angsuran per bulan</span>
+              <span style={{ color: "#1e293b" }}>{formatRupiah(cicilanPerBulan)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#eff6ff", border: "1.5px solid #bfdbfe", padding: "12px 16px", borderRadius: "12px", marginTop: "16px" }}>
+              <div>
+                <div style={{ fontWeight: "800", color: "#1d4ed8", fontSize: "13px" }}>Sisa Utang Aktif</div>
+                <div style={{ fontSize: "11px", color: "#3b82f6", fontWeight: "600", marginTop: "2px" }}>({sisaCicilan} cicilan tersisa)</div>
               </div>
-            )}
+              <span style={{ fontWeight: "900", fontSize: "16px", color: "#1d4ed8", letterSpacing: "-.02em" }}>
+                {formatRupiah(sisaCicilan * cicilanPerBulan)}
+              </span>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Nominal */}
-      <div style={{ marginBottom: "20px" }}>
-        <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#1e293b", marginBottom: "8px" }}>
-          Nominal Pinjaman <span style={{ color: "#dc2626" }}>*</span>
-        </label>
-        <div style={{ position: "relative" }}>
-          <span style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "14px", fontWeight: "600" }}>
-            Rp
-          </span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={nominal > 0 ? nominal.toLocaleString("id-ID") : ""}
-            onChange={(e) => {
-              const val = parseInt(e.target.value.replace(/\D/g, "")) || 0;
-              // Batasi input tidak boleh lebih dari 15 Juta sesuai limit
-              setNominal(Math.min(val, 15000000));
-            }}
-            placeholder="0"
-            className="fintech-input"
-            style={{ paddingLeft: "48px", fontWeight: "600" }}
+        {/* Catatan */}
+        <div>
+          <label className="kop-label">
+            Catatan Historis <span style={{ color: "#94a3b8", fontWeight: "500" }}>(opsional)</span>
+          </label>
+          <textarea
+            name="catatan"
+            rows={2}
+            placeholder="Contoh: Migrasi dari buku Excel Mei 2026..."
+            className="kop-input"
+            style={{ resize: "vertical" }}
           />
-          <input type="hidden" name="nominal" value={nominal} />
         </div>
-      </div>
 
-      {/* Tenor */}
-      <div style={{ marginBottom: "20px" }}>
-        <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#1e293b", marginBottom: "8px" }}>
-          Tenor (Bulan) <span style={{ color: "#dc2626" }}>*</span>
-        </label>
-        <input
-          type="number"
-          value={tenor}
-          onChange={(e) => setTenor(Math.min(parseInt(e.target.value) || 1, 12))}
-          name="tenor_bulan"
-          min={1}
-          max={12}
-          className="fintech-input"
-        />
-        <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Maksimal 12 bulan</div>
-      </div>
-
-      {/* Cicilan terbayar */}
-      <div style={{ marginBottom: "20px" }}>
-        <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#1e293b", marginBottom: "8px" }}>
-          Cicilan Sudah Terbayar <span style={{ color: "#dc2626" }}>*</span>
-        </label>
-        <input
-          type="number"
-          value={cicilanTerbayar}
-          onChange={(e) => setCicilanTerbayar(Math.min(parseInt(e.target.value) || 0, tenor))}
-          name="cicilan_terbayar"
-          min={0}
-          max={tenor}
-          className="fintech-input"
-        />
-        <div style={{ fontSize: "12px", color: "#1d4ed8", fontWeight: "600", marginTop: "6px" }}>Sisa cicilan: {sisaCicilan} bulan</div>
-      </div>
-
-      {/* Tanggal pencairan */}
-      <div style={{ marginBottom: "20px" }}>
-        <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#1e293b", marginBottom: "8px" }}>
-          Tanggal Pencairan Asli <span style={{ color: "#dc2626" }}>*</span>
-        </label>
-        <input type="date" name="tanggal_pencairan" className="fintech-input" required />
-      </div>
-
-      {/* Ringkasan */}
-      {nominal > 0 && tenor > 0 && (
-        <div style={{ background: "#eff6ff", border: "1px solid #dbeafe", borderRadius: "14px", padding: "18px", marginBottom: "24px" }}>
-          <div style={{ fontWeight: "700", fontSize: "14px", color: "#1d4ed8", marginBottom: "12px" }}>Ringkasan Pinjaman</div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", marginBottom: "8px" }}>
-            <span style={{ color: "#64748b" }}>Nominal</span>
-            <span style={{ fontWeight: "600", color: "#1e293b" }}>{formatRupiah(nominal)}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", marginBottom: "8px", color: "#dc2626" }}>
-            <span>Biaya admin (4%)</span>
-            <span>- {formatRupiah(biayaAdmin)}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", marginBottom: "8px" }}>
-            <span style={{ color: "#64748b" }}>Cicilan / bulan</span>
-            <span style={{ fontWeight: "600", color: "#1e293b" }}>{formatRupiah(cicilanPerBulan)}</span>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              borderTop: "1px solid #dbeafe",
-              paddingTop: "10px",
-              marginTop: "4px",
-              fontWeight: "700",
-            }}
+        {/* Submit */}
+        <div style={{ display: "flex", gap: "14px" }}>
+          <Link href="/dashboard/pinjaman" className="kop-btn-cancel">
+            Batal
+          </Link>
+          <button
+            type="submit"
+            disabled={isPending || !selectedUser || nominal === 0}
+            className="kop-btn-submit"
           >
-            <span style={{ color: "#1e293b" }}>Sisa cicilan</span>
-            <span style={{ color: "#1d4ed8" }}>
-              {sisaCicilan} × {formatRupiah(cicilanPerBulan)}
-            </span>
-          </div>
+            {isPending ? (
+              <><span className="kop-spin"></span> Menyimpan...</>
+            ) : (
+              <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Simpan Data Migrasi</>
+            )}
+          </button>
         </div>
-      )}
-
-      {/* Catatan */}
-      <div style={{ marginBottom: "30px" }}>
-        <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "#1e293b", marginBottom: "8px" }}>
-          Catatan Migrasi <span style={{ color: "#94a3b8", fontWeight: "400" }}>(opsional)</span>
-        </label>
-        <textarea
-          name="catatan"
-          rows={2}
-          placeholder="Contoh: Saldo bawaan dari file Excel bulan Mei"
-          className="fintech-input"
-          style={{ resize: "vertical" }}
-        />
-      </div>
-
-      {/* Submit */}
-      <div style={{ display: "flex", gap: "12px" }}>
-        <Link
-          href="/dashboard/pinjaman"
-          style={{
-            flex: 1,
-            textAlign: "center",
-            padding: "14px 0",
-            background: "#fff",
-            border: "1px solid #e2e8f0",
-            borderRadius: "12px",
-            fontSize: "14px",
-            fontWeight: "600",
-            color: "#475569",
-            textDecoration: "none",
-          }}
-        >
-          Kembali
-        </Link>
-        <button
-          type="submit"
-          disabled={isPending || !selectedUser || nominal === 0}
-          style={{
-            flex: 1,
-            padding: "14px 0",
-            background: isPending || !selectedUser || nominal === 0 ? "#cbd5e1" : "#1e293b",
-            color: "#fff",
-            border: "none",
-            borderRadius: "12px",
-            fontSize: "14px",
-            fontWeight: "600",
-            cursor: isPending || !selectedUser || nominal === 0 ? "not-allowed" : "pointer",
-            transition: "background 0.2s ease"
-          }}
-        >
-          {isPending ? "Menyimpan..." : "+ Simpan Data"}
-        </button>
-      </div>
-    </form>
+      </form>
+    </>
   );
 }
