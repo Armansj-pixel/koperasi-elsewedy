@@ -4,6 +4,47 @@ import { getProfilSaya } from "@/lib/profil/actions";
 import EditProfilForm from "./EditProfilForm";
 import Link from "next/link";
 
+// ── CSS STYLES ──
+const pageStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+  *, *::before, *::after { box-sizing: border-box; }
+
+  .kop-shell { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+  
+  .kop-header {
+    background: linear-gradient(150deg, #0a1e4a 0%, #0f2d6b 40%, #1a4db3 75%, #2563eb 100%);
+    padding: 30px 20px 100px;
+    position: relative; overflow: hidden;
+  }
+  .kop-orb { position: absolute; border-radius: 50%; pointer-events: none; }
+
+  .kop-card {
+    background: #fff;
+    border-radius: 20px;
+    border: 1.5px solid #e2e8f0;
+    box-shadow: 0 4px 28px rgba(15,45,107,.05);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  .kop-btn-nav {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255, 255, 255, 0.15); color: #fff;
+    padding: 8px 14px; border-radius: 20px;
+    text-decoration: none; font-size: 13px; font-weight: 600;
+    backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2);
+    transition: transform 0.2s, background 0.2s;
+  }
+  .kop-btn-nav:hover { background: rgba(255, 255, 255, 0.25); transform: translateY(-1px); }
+
+  .kop-content-wrapper { padding: 0 16px 40px; margin-top: -70px; position: relative; z-index: 20; }
+  
+  @media (min-width: 768px) {
+    .kop-header { padding: 40px 32px 100px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; }
+    .kop-content-wrapper { padding: 0 32px 40px; margin-top: -70px; }
+  }
+`;
+
 export default async function EditProfilPage({
   searchParams,
 }: {
@@ -15,106 +56,66 @@ export default async function EditProfilPage({
 
   if (!profil || error) {
     return (
-      <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
-        Gagal memuat profil: {error}
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+        <div style={{ textAlign: "center", color: "#64748b", background: "#fff", padding: "32px", borderRadius: "24px", boxShadow: "0 10px 25px rgba(0,0,0,0.05)" }}>
+          <svg style={{ margin: "0 auto 16px", color: "#cbd5e1" }} width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div style={{ fontWeight: "700", fontSize: "18px", color: "#0f172a", marginBottom: "8px" }}>Gagal Memuat Data</div>
+          <div style={{ fontSize: "14px" }}>{error || "Profil tidak ditemukan."}</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ backgroundColor: "#f1f5f9", minHeight: "100vh", paddingBottom: "40px" }}>
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+    <main className="kop-shell bg-slate-100 min-h-screen">
+      <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
 
-        .fintech-header {
-          position: relative;
-          background: linear-gradient(145deg, #0f2d6b 0%, #1a4db3 60%, #2563eb 100%);
-          overflow: hidden;
-          padding: 24px 20px;
-          height: 180px;
-          border-bottom-left-radius: 24px;
-          border-bottom-right-radius: 24px;
-        }
-        .fintech-header::before, .fintech-header::after {
-          content: ''; position: absolute; pointer-events: none; border-radius: 50%;
-        }
-        .fintech-header::before { top: -40px; left: -40px; width: 150px; height: 150px; background: rgba(255,255,255,0.08); }
-        .fintech-header::after { bottom: -20px; right: -60px; width: 200px; height: 200px; background: rgba(255,255,255,0.05); }
+      <div className="w-full max-w-5xl mx-auto bg-slate-100 min-h-screen relative sm:shadow-xl sm:border-x sm:border-slate-200">
+        
+        {/* --- Header Area --- */}
+        <header className="kop-header">
+          <div className="kop-orb" style={{ width: 280, height: 280, top: -100, right: -100, background: 'radial-gradient(circle, rgba(255,255,255,.1) 0%, transparent 70%)' }} />
+          <div className="kop-orb" style={{ width: 200, height: 200, bottom: -40, left: -40, background: 'radial-gradient(circle, rgba(96,165,250,.2) 0%, transparent 70%)' }} />
+          
+          <div style={{ position: "relative", zIndex: 10, maxWidth: "640px", margin: "0 auto" }}>
+            <Link href="/dashboard/profil" className="kop-btn-nav" style={{ marginBottom: "20px" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+              Kembali ke Profil
+            </Link>
+            <h1 style={{ color: "#fff", margin: 0, fontSize: "28px", fontWeight: "800", letterSpacing: "-.02em" }}>
+              Edit Data Profil
+            </h1>
+            <p style={{ color: "rgba(255,255,255,0.8)", margin: "4px 0 0 0", fontSize: "14px", fontWeight: "500" }}>
+              Perbarui informasi kontak dan data diri Anda.
+            </p>
+          </div>
+        </header>
 
-        .card-fintech {
-          background: #fff;
-          border-radius: 16px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 2px 12px rgba(15,45,107,.06);
-          padding: 24px;
-        }
-        .fintech-input {
-          width: 100%;
-          padding: 14px 16px;
-          border-radius: 12px;
-          border: 1px solid #e2e8f0;
-          font-size: 14px;
-          background-color: #fff;
-          color: #1e293b;
-        }
-        .fintech-input:focus {
-          outline: none;
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37,99,235,.12);
-        }
-      `,
-        }}
-      />
+        {/* --- Main Content Area --- */}
+        <div className="kop-content-wrapper">
+          <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+            
+            {searchParams.error && (
+              <div style={{ background: "#fef2f2", border: "1.5px solid #fecaca", color: "#b91c1c", borderRadius: "14px", padding: "16px", marginBottom: "20px", fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px" }}>
+                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>{searchParams.error}</span>
+              </div>
+            )}
 
-      <header className="fintech-header">
-        <div style={{ maxWidth: "560px", margin: "0 auto", position: "relative", zIndex: 10 }}>
-          <Link
-            href="/dashboard/profil"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              background: "rgba(255,255,255,0.2)",
-              color: "#fff",
-              padding: "8px 16px",
-              borderRadius: "20px",
-              textDecoration: "none",
-              fontSize: "14px",
-              fontWeight: "500",
-              backdropFilter: "blur(4px)",
-              marginBottom: "16px",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            Profil
-          </Link>
-          <h1 style={{ color: "#fff", margin: 0, fontSize: "24px", fontWeight: "700" }}>Edit Profil</h1>
-        </div>
-      </header>
-
-      <main style={{ maxWidth: "560px", margin: "-40px auto 0 auto", padding: "0 20px", position: "relative", zIndex: 20 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {searchParams.error && (
-            <div style={{ background: "#fee2e2", border: "1px solid #fecaca", color: "#b91c1c", borderRadius: "12px", padding: "14px 18px", fontSize: "14px", fontWeight: "500" }}>
-              ✗ {searchParams.error}
+            <div className="kop-card" style={{ padding: "24px" }}>
+              <EditProfilForm
+                nama={profil.nama}
+                email={profil.email ?? ""}
+                noHp={profil.no_hp ?? ""}
+                fotoProfil={profil.foto_profil}
+              />
             </div>
-          )}
 
-          <div className="card-fintech">
-            <EditProfilForm
-              nama={profil.nama}
-              email={profil.email ?? ""}
-              noHp={profil.no_hp ?? ""}
-              fotoProfil={profil.foto_profil}
-            />
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
