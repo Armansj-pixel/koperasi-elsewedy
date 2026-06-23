@@ -45,8 +45,11 @@ export default async function DetailAnggotaPage({
   }
 
   const saldo = anggota.saldo_simpanan?.[0]?.total_saldo || 0;
+  
+  // LOGIKA HAK AKSES
   const isSuperAdmin = currentUser.role === "SUPERADMIN";
   const canEdit = ["SUPERADMIN", "SEKRETARIS"].includes(currentUser.role);
+  const canResign = ["SUPERADMIN", "SEKRETARIS", "BENDAHARA"].includes(currentUser.role);
 
   const wajib = Number(anggota.simpanan_wajib_bulanan || anggota.simpanan_bulanan || 0);
   const sukarela = Number(anggota.simpanan_sukarela_bulanan || 0);
@@ -220,10 +223,6 @@ export default async function DetailAnggotaPage({
               {/* Kolom Kiri */}
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 {/* --- Data Pribadi --- */}
-                {/* PERBAIKAN DI SINI:
-                  Semua tag <path>, <polyline>, <line> di dalam prop 'icon' 
-                  sekarang dibungkus dengan <Fragment> (<> ... </>)
-                */}
                 <div className="kop-card" style={{ padding: "20px", margin: 0 }}>
                   <SectionTitle 
                     icon={
@@ -308,7 +307,6 @@ export default async function DetailAnggotaPage({
                       badgeStyle={roleColors[anggota.role] || { backgroundColor: "#f1f5f9", color: "#334155", border: "1px solid #e2e8f0" }}
                     />
                     
-                    {/* TAMPILAN RINCIAN POTONGAN */}
                     <div className="data-row" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid #f1f5f9" }}>
                       <span style={{ fontSize: 13, color: "#64748b", fontWeight: 500, flexShrink: 0 }}>Total Potongan</span>
                       <div style={{ textAlign: "right" }}>
@@ -335,8 +333,8 @@ export default async function DetailAnggotaPage({
                   </div>
                 </div>
 
-                {/* --- Action Buttons (Superadmin only) --- */}
-                {isSuperAdmin && (
+                {/* --- Action Buttons --- */}
+                {(isSuperAdmin || canResign) && (
                   <div className="kop-card" style={{ padding: "20px", margin: 0 }}>
                     <SectionTitle 
                       icon={
@@ -345,58 +343,80 @@ export default async function DetailAnggotaPage({
                           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                         </>
                       } 
-                      title="Aksi Administrator" 
+                      title="Aksi & Pengaturan" 
                     />
                     
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      <form action={async () => {
-                        "use server";
-                        const result = await resetPasswordAnggota(params.id);
-                        if (result.success) {
-                          redirect(`/dashboard/anggota/${params.id}?msg=${encodeURIComponent(result.message ?? "Berhasil")}`);
-                        } else {
-                          redirect(`/dashboard/anggota/${params.id}?error=${encodeURIComponent(result.error || "Gagal reset password")}`);
-                        }
-                      }}>
-                        <button type="submit" className="kop-action-btn" style={{ background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a" }}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-                          Reset Password
-                        </button>
-                      </form>
+                      
+                      {/* TOMBOL CLEARANCE (RESIGN) */}
+                      {canResign && (
+                        <Link 
+                          href={`/dashboard/anggota/resign?id=${params.id}`} 
+                          className="kop-action-btn" 
+                          style={{
+                            background: "linear-gradient(135deg, #be123c, #9f1239)", 
+                            color: "#fff", 
+                            border: "none", 
+                            textDecoration: "none",
+                            boxShadow: "0 4px 12px rgba(190,18,60,.2)"
+                          }}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="8.5" cy="7" r="4"/>
+                            <line x1="23" y1="11" x2="17" y2="11"/>
+                          </svg>
+                          Proses Tutup Keanggotaan (Resign)
+                        </Link>
+                      )}
 
-                      <form action={async () => {
-                        "use server";
-                        const result = await toggleAnggotaStatus(params.id, !anggota.is_active);
-                        if (result.success) {
-                          redirect(`/dashboard/anggota/${params.id}?msg=${encodeURIComponent(result.message ?? "Berhasil")}`);
-                        } else {
-                          redirect(`/dashboard/anggota/${params.id}?error=${encodeURIComponent(result.error || "Gagal update status")}`);
-                        }
-                      }}>
-                        <button type="submit" className="kop-action-btn" style={{
-                          background: anggota.is_active ? "#fef2f2" : "#f0fdf4",
-                          color: anggota.is_active ? "#b91c1c" : "#15803d",
-                          border: `1px solid ${anggota.is_active ? "#fecaca" : "#bbf7d0"}`
-                        }}>
-                          {anggota.is_active ? (
-                            <>
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19.69 14a6.9 6.9 0 0 0 .31-2V5l-8-3-3.16 1.18"/><path d="M4.73 4.73L4 5v7c0 6 8 10 8 10a20.29 20.29 0 0 0 5.62-4.38"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                              Nonaktifkan Akun
-                            </>
-                          ) : (
-                            <>
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                              Aktifkan Akun
-                            </>
-                          )}
-                        </button>
-                      </form>
-                    </div>
+                      {/* KHUSUS SUPERADMIN: Reset Password & Toggle Status */}
+                      {isSuperAdmin && (
+                        <>
+                          <form action={async () => {
+                            "use server";
+                            const result = await resetPasswordAnggota(params.id);
+                            if (result.success) {
+                              redirect(`/dashboard/anggota/${params.id}?msg=${encodeURIComponent(result.message ?? "Berhasil")}`);
+                            } else {
+                              redirect(`/dashboard/anggota/${params.id}?error=${encodeURIComponent(result.error || "Gagal reset password")}`);
+                            }
+                          }}>
+                            <button type="submit" className="kop-action-btn" style={{ background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a" }}>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                              Reset Password
+                            </button>
+                          </form>
 
-                    <div style={{ marginTop: "14px", padding: "10px 12px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-                      <p style={{ margin: 0, fontSize: 11, color: "#64748b", lineHeight: 1.5 }}>
-                        <strong style={{ color: "#475569" }}>Info:</strong> Reset password akan mengubah kata sandi menjadi <strong style={{ color: "#0f172a" }}>4 digit terakhir NIK</strong>.
-                      </p>
+                          <form action={async () => {
+                            "use server";
+                            const result = await toggleAnggotaStatus(params.id, !anggota.is_active);
+                            if (result.success) {
+                              redirect(`/dashboard/anggota/${params.id}?msg=${encodeURIComponent(result.message ?? "Berhasil")}`);
+                            } else {
+                              redirect(`/dashboard/anggota/${params.id}?error=${encodeURIComponent(result.error || "Gagal update status")}`);
+                            }
+                          }}>
+                            <button type="submit" className="kop-action-btn" style={{
+                              background: anggota.is_active ? "#fef2f2" : "#f0fdf4",
+                              color: anggota.is_active ? "#b91c1c" : "#15803d",
+                              border: `1px solid ${anggota.is_active ? "#fecaca" : "#bbf7d0"}`
+                            }}>
+                              {anggota.is_active ? (
+                                <>
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19.69 14a6.9 6.9 0 0 0 .31-2V5l-8-3-3.16 1.18"/><path d="M4.73 4.73L4 5v7c0 6 8 10 8 10a20.29 20.29 0 0 0 5.62-4.38"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                  Nonaktifkan Akun
+                                </>
+                              ) : (
+                                <>
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                  Aktifkan Akun
+                                </>
+                              )}
+                            </button>
+                          </form>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
