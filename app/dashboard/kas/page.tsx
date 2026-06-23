@@ -19,11 +19,11 @@ const pageStyles = `
 export default async function KasPengeluaranPage() {
   await requireRole(["SUPERADMIN", "BENDAHARA"]);
 
-  // Ambil daftar akun (CoA) untuk dropdown form
   const { data: coaList } = await getChartOfAccounts();
   
-  // Filter khusus untuk akun Biaya (awalan 5)
+  // Pisahkan akun biaya dan pendapatan
   const expenseAccounts = coaList.filter(a => a.kode_akun.startsWith("5"));
+  const revenueAccounts = coaList.filter(a => a.kode_akun.startsWith("4"));
 
   return (
     <main className="kop-shell bg-slate-100 min-h-screen">
@@ -40,18 +40,17 @@ export default async function KasPengeluaranPage() {
               Kembali ke Dashboard
             </Link>
             <h1 style={{ color: "#fff", margin: 0, fontSize: "28px", fontWeight: "900", letterSpacing: "-.02em" }}>
-              Kas & Pengeluaran
+              Kas, Pemasukan & Pengeluaran
             </h1>
             <p style={{ color: "rgba(255,255,255,0.9)", margin: "4px 0 0 0", fontSize: "14px", fontWeight: "500" }}>
-              Catat pengisian laci kas dan biaya operasional Koperasi.
+              Kelola pencatatan biaya, pemasukan lainnya, dan uang laci koperasi.
             </p>
           </div>
         </header>
 
         <div className="kop-content-wrapper">
           <div style={{ maxWidth: "800px", margin: "0 auto" }}>
-            {/* Form Interaktif di-render di Client Component */}
-            <KasForm expenseAccounts={expenseAccounts} />
+            <KasForm expenseAccounts={expenseAccounts} revenueAccounts={revenueAccounts} />
           </div>
         </div>
       </div>
