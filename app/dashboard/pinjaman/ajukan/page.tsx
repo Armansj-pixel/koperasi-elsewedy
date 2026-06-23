@@ -52,14 +52,14 @@ export default async function AjukanPinjamanPage({
 }: {
   searchParams: { error?: string };
 }) {
-  // 1. Izinkan pengurus masuk
+  // 1. Izinkan pengurus & anggota masuk
   const currentUser = await requireRole(["ANGGOTA", "BENDAHARA", "SUPERADMIN"]);
   const supabase = await createClient();
 
-  // 2. Deteksi Otoritas
+  // 2. Deteksi Otoritas Override
   const canOverride = ["BENDAHARA", "SUPERADMIN"].includes(currentUser.role);
 
-  // 3. AMBIL DATA ANGGOTA (Hanya jika yang login adalah admin)
+  // 3. AMBIL DATA ANGGOTA (Hanya diambil untuk dropdown jika dia pengurus)
   let anggotaList: any[] = [];
   if (canOverride) {
     const { data: users } = await supabase
@@ -70,7 +70,7 @@ export default async function AjukanPinjamanPage({
     anggotaList = users || [];
   }
 
-  // 4. LOGIKA BLOKIR (Hanya berlaku ketat untuk Anggota Biasa)
+  // 4. LOGIKA BLOKIR (Hanya berlaku untuk Anggota biasa)
   const pinjamanAktif = await getPinjamanAktifAnggota(currentUser.id);
   
   let blockReason = "";
@@ -78,7 +78,6 @@ export default async function AjukanPinjamanPage({
   let sisaCicilanLama = 0;
   let idPinjamanLama = null;
 
-  // Jika yang login punya pinjaman (Mengecek status dirinya sendiri)
   if (pinjamanAktif.length > 0) {
     const p = pinjamanAktif[0];
     if (["PENDING_L1", "PENDING_L2", "PENDING_L3", "APPROVED"].includes(p.status)) {
@@ -93,7 +92,6 @@ export default async function AjukanPinjamanPage({
 
       sisaCicilanLama = count || 0;
 
-      // Jika dia Anggota Biasa & Sisa > 3, BLOKIR. (Kalau Bendahara, form tetap tembus)
       if (sisaCicilanLama > 3 && !canOverride) {
         blockReason = `Anda tidak dapat mengajukan pinjaman baru. Sisa cicilan Anda saat ini masih ${sisaCicilanLama} kali (Syarat normal Top-Up maksimal sisa 3 cicilan).`;
         idPinjamanLama = p.id;
@@ -103,7 +101,7 @@ export default async function AjukanPinjamanPage({
     }
   }
 
-  // Jika Pengurus yang buka form, PAKSA buka blokirnya agar formnya muncul
+  // Pengurus memegang Kunci Master, maka hilangkan blokir tampilan milik dirinya sendiri
   if (canOverride) {
     blockReason = ""; 
   }
@@ -148,7 +146,7 @@ export default async function AjukanPinjamanPage({
 
             {blockReason ? (
               <div className="kop-card" style={{ padding: "40px 24px", textAlign: "center" }}>
-                <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#fffbeb", display: "flex", alignItems: "center", justify-content: "center", margin: "0 auto 16px" }}>
+                <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#fffbeb", display: "flex", alignItems: "center", justifycontent: "center", margin: "0 auto 16px" }}>
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                     <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
@@ -182,7 +180,6 @@ export default async function AjukanPinjamanPage({
                 )}
                 
                 <div className="kop-card" style={{ padding: "24px" }}>
-                  {/* INI KUNCI AGAR DROPDOWN MUNCUL */}
                   <AjukanPinjamanForm canOverride={canOverride} anggotaList={anggotaList} />
                 </div>
               </>
