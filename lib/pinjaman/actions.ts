@@ -77,14 +77,14 @@ export interface PinjamanWithUser extends Partial<Pinjaman> {
   nominal: number
   total_diterima: number
   tanggal_pencairan: string | null
-  sisa_cicilan_kali?: number    // Ditambahkan untuk UI Sisa Hutang
-  sisa_outstanding?: number     // Ditambahkan untuk UI Sisa Hutang
+  sisa_cicilan_kali?: number
+  sisa_outstanding?: number
 }
 
 // ─── Kalkulasi ────────────────────────────────────────────────────────────────
 
 export async function hitungPinjaman(nominal: number, tenor: number) {
-  const biayaAdmin = Math.round(nominal * 0.04) // Potongan 4%
+  const biayaAdmin = Math.round(nominal * 0.04)
   const totalDiterima = nominal - biayaAdmin
   const cicilanPerBulan = Math.round(nominal / tenor)
   return { biayaAdmin, totalDiterima, cicilanPerBulan }
@@ -106,19 +106,15 @@ function generateJadwalCicilan(
   let startMonth = tanggalMulai.getMonth()
   const startYear = tanggalMulai.getFullYear()
 
-  // Jika lewat tanggal 10, cicilan pertama bergeser ke tanggal 25 bulan berikutnya
   if (day > 10) {
     startMonth += 1
   }
 
   for (let i = 1; i <= tenor; i++) {
-    // Dipaksa jatuh tempo ke tanggal 25 setiap bulannya
     const jatuhTempo = new Date(startYear, startMonth + (i - 1), 25)
-
     const nominalCicilan = i === tenor ? sisaPokok : cicilanPerBulan
     sisaPokok -= nominalCicilan
 
-    // Format string yyyy-mm-dd yang aman dari pergeseran timezone ISO String
     const yyyy = jatuhTempo.getFullYear()
     const mm = String(jatuhTempo.getMonth() + 1).padStart(2, '0')
     const dd = String(jatuhTempo.getDate()).padStart(2, '0')
@@ -137,7 +133,7 @@ function generateJadwalCicilan(
   return cicilan
 }
 
-// ─── GET: List Pinjaman (DIPERBARUI UNTUK SISA HUTANG REAL) ───────────────────
+// ─── GET: List Pinjaman ───────────────────────────────────────────────────────
 
 export async function getPinjamanList(filter?: {
   status?: PinjamanStatus
@@ -154,7 +150,6 @@ export async function getPinjamanList(filter?: {
   if (filter?.userId) query = query.eq('user_id', filter.userId)
 
   const { data: pinjaman, error } = await query
-
   if (error) return { data: [], error: error.message }
 
   const userIds = [...new Set(pinjaman?.map((p) => p.user_id) ?? [])]
@@ -165,7 +160,6 @@ export async function getPinjamanList(filter?: {
 
   const userMap = new Map(users?.map((u) => [u.id, u]) ?? [])
 
-  // Cari semua tagihan cicilan yang belum dibayar untuk menghitung Sisa Hutang Real
   const { data: unpaid } = await supabase
     .from('cicilan_pinjaman')
     .select('pinjaman_id')
@@ -238,6 +232,11 @@ export async function getPinjamanDetail(id: number) {
     approverMap = new Map(approvers?.map((a) => [a.id, a.nama]) ?? [])
   }
 
+  // Auto-Hitung untuk UI Detail
+  const cicilanBelumLunas = cicilan?.filter(c => c.status === 'SCHEDULED' || c.status === 'OVERDUE') || [];
+  const sisaKali = cicilanBelumLunas.length;
+  const sisaOutstanding = pinjaman.status === 'ACTIVE' ? sisaKali * (Number(pinjaman.cicilan_per_bulan) || 0) : 0;
+
   return {
     data: {
       ...pinjaman,
@@ -254,6 +253,8 @@ export async function getPinjamanDetail(id: number) {
       nama_l2: pinjaman.approved_l2_by ? approverMap.get(pinjaman.approved_l2_by) ?? '-' : null,
       nama_l3: pinjaman.approved_l3_by ? approverMap.get(pinjaman.approved_l3_by) ?? '-' : null,
       nama_disbursed: pinjaman.disbursed_by ? approverMap.get(pinjaman.disbursed_by) ?? '-' : null,
+      sisa_cicilan_kali: sisaKali,
+      sisa_outstanding: sisaOutstanding
     },
     cicilan: cicilan ?? [],
     error: null,
@@ -505,7 +506,6 @@ export async function cairkanPinjaman(formData: FormData) {
 
   const tanggalMulai = tanggalCairan ? new Date(tanggalCairan) : new Date()
 
-  // 1. Update status pinjaman baru menjadi ACTIVE
   const { error: updateError } = await supabase
     .from('pinjaman')
     .update({
@@ -521,7 +521,6 @@ export async function cairkanPinjaman(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal mencairkan pinjaman: ' + updateError.message)}`)
   }
 
-  // 2. Generate jadwal cicilan baru
   const jadwal = generateJadwalCicilan(
     pinjamanId,
     pinjaman.nominal_pokok,
@@ -537,7 +536,6 @@ export async function cairkanPinjaman(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal generate jadwal cicilan: ' + cicilanError.message)}`)
   }
 
-  // 3. AUTO-SETTLEMENT TOP-UP: Tutup pinjaman lama secara otomatis jika ada relasinya
   if (pinjaman.pelunasan_pinjaman_lama_id) {
     const oldLoanId = pinjaman.pelunasan_pinjaman_lama_id
 
@@ -554,6 +552,8 @@ export async function cairkanPinjaman(formData: FormData) {
       .from('pinjaman')
       .update({ 
         status: 'LUNAS', 
+        sisa_cicilan: 0,
+        sisa_pokok: 0,
         tanggal_lunas: tanggalMulai.toISOString().split('T')[0],
         updated_at: new Date().toISOString() 
       })
@@ -576,6 +576,7 @@ export async function bayarCicilan(formData: FormData) {
 
   const supabase = await createClient()
 
+  // 1. Ubah status cicilan menjadi PAID
   const { error: cicilanError } = await supabase
     .from('cicilan_pinjaman')
     .update({
@@ -589,27 +590,32 @@ export async function bayarCicilan(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal input pembayaran: ' + cicilanError.message)}`)
   }
 
-  const { data: cicilan } = await supabase
+  // 2. AUTO-HEAL: Hitung ulang sisa tagihan secara real-time dan update ke Database
+  const { data: sisaCicilanData } = await supabase
     .from('cicilan_pinjaman')
-    .select('status')
+    .select('nominal_cicilan')
     .eq('pinjaman_id', pinjamanId)
+    .in('status', ['SCHEDULED', 'OVERDUE'])
 
-  const semuaLunas = cicilan?.every((c) => c.status === 'PAID' || c.status === 'WAIVED')
+  const sisaKali = sisaCicilanData?.length || 0;
+  const sisaPokok = sisaCicilanData?.reduce((sum, c) => sum + Number(c.nominal_cicilan), 0) || 0;
+  const semuaLunas = sisaKali === 0;
 
-  if (semuaLunas) {
-    await supabase
-      .from('pinjaman')
-      .update({ 
-        status: 'LUNAS', 
-        tanggal_lunas: new Date().toISOString().split('T')[0],
-        updated_at: new Date().toISOString() 
-      })
-      .eq('id', pinjamanId)
-  }
+  // 3. Update Sisa Pokok di tabel Induk
+  await supabase
+    .from('pinjaman')
+    .update({ 
+      sisa_cicilan: sisaKali,
+      sisa_pokok: sisaPokok,
+      status: semuaLunas ? 'LUNAS' : 'ACTIVE',
+      tanggal_lunas: semuaLunas ? new Date().toISOString().split('T')[0] : null,
+      updated_at: new Date().toISOString() 
+    })
+    .eq('id', pinjamanId)
 
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
   revalidatePath('/dashboard/pinjaman')
-  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pembayaran cicilan berhasil dicatat')}`)
+  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pembayaran berhasil dicatat. Sisa hutang langsung diperbarui!')}`)
 }
 
 // ─── ACTION: Pelunasan Pinjaman Sekaligus ─────────────────────────────────────
@@ -632,6 +638,7 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Pinjaman tidak dapat dilunasi. Pastikan statusnya Aktif.')}`)
   }
 
+  // 1. Lunas Semua Cicilan
   const { error: cicilanError } = await supabase
     .from('cicilan_pinjaman')
     .update({
@@ -645,9 +652,12 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal memperbarui status cicilan: ' + cicilanError.message)}`)
   }
 
+  // 2. Nol-kan sisa hutang di tabel Induk
   const { error: lunasError } = await supabase
     .from('pinjaman')
     .update({ 
+      sisa_cicilan: 0,
+      sisa_pokok: 0,
       status: 'LUNAS', 
       tanggal_lunas: tanggalPelunasan,
       updated_at: new Date().toISOString()
@@ -660,7 +670,7 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
 
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
   revalidatePath('/dashboard/pinjaman')
-  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan berhasil diproses. Status pinjaman sekarang LUNAS.')}`)
+  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan berhasil diproses. Sisa hutang kini menjadi Rp 0.')}`)
 }
 
 // ─── ACTION: Input Pinjaman Existing ─────────────────────────────────────────
@@ -752,7 +762,7 @@ export async function inputPinjamanExisting(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjaman.id}?success=${encodeURIComponent('Data pinjaman existing berhasil diinput')}`)
 }
 
-// ─── GET: Statistik Pinjaman (DIPERBARUI UNTUK SISA HUTANG REAL) ──────────────
+// ─── GET: Statistik Pinjaman ──────────────────────────────────────────────────
 
 export async function getStatistikPinjaman() {
   const supabase = await createClient()
@@ -763,7 +773,6 @@ export async function getStatistikPinjaman() {
 
   if (!pinjaman) return { total: 0, aktif: 0, pending: 0, lunas: 0, totalOutstanding: 0, totalCicilanBulanan: 0 }
 
-  // Ambil data cicilan yang belum dibayar untuk menghitung Sisa Hutang Real
   const { data: unpaid } = await supabase
     .from('cicilan_pinjaman')
     .select('pinjaman_id')
@@ -782,7 +791,6 @@ export async function getStatistikPinjaman() {
   )
   const lunas = pinjaman.filter((p) => p.status === 'LUNAS')
 
-  // Total Outstanding sekarang dihitung berdasarkan (Sisa Kali Cicilan) x (Cicilan Per Bulan)
   const totalOutstanding = aktif.reduce((sum, p) => {
     const sisaKali = countMap[p.id] || 0;
     return sum + (sisaKali * (Number(p.cicilan_per_bulan) || 0));
@@ -804,7 +812,6 @@ export async function potongCicilanMassal(bulan: number, tahun: number) {
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
   const supabase = await createClient()
 
-  // Filter pencarian cicilan berdasarkan pattern jatuh tempo tahun-bulan "YYYY-MM"
   const targetMonthStr = `${tahun}-${String(bulan).padStart(2, '0')}`
 
   const { data: cicilanTertarget, error: fetchError } = await supabase
@@ -820,6 +827,42 @@ export async function potongCicilanMassal(bulan: number, tahun: number) {
 
   const cicilanIds = cicilanTertarget.map(c => c.id)
 
-  // 1. Eksekusi pelunasan massal semua cicilan di bulan tersebut
+  // 1. Eksekusi pelunasan massal
   const { error: updateError } = await supabase
-    .from
+    .from('cicilan_pinjaman')
+    .update({
+      status: 'PAID',
+      tanggal_pembayaran: new Date().toISOString().split('T')[0]
+    })
+    .in('id', cicilanIds)
+
+  if (updateError) return { success: false, message: "Gagal memproses pembayaran massal." }
+
+  // 2. AUTO-HEAL: Update Sisa Pokok seluruh Pinjaman Induk yang terdampak
+  const pinjamanIds = [...new Set(cicilanTertarget.map(c => c.pinjaman_id))]
+
+  for (const pId of pinjamanIds) {
+    const { data: sisaCicilanData } = await supabase
+      .from('cicilan_pinjaman')
+      .select('nominal_cicilan')
+      .eq('pinjaman_id', pId)
+      .in('status', ['SCHEDULED', 'OVERDUE'])
+
+    const sisaKali = sisaCicilanData?.length || 0;
+    const sisaPokok = sisaCicilanData?.reduce((sum, c) => sum + Number(c.nominal_cicilan), 0) || 0;
+    
+    await supabase
+      .from('pinjaman')
+      .update({ 
+        sisa_cicilan: sisaKali,
+        sisa_pokok: sisaPokok,
+        status: sisaKali === 0 ? 'LUNAS' : 'ACTIVE', 
+        tanggal_lunas: sisaKali === 0 ? new Date().toISOString().split('T')[0] : null,
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', pId)
+  }
+
+  revalidatePath('/dashboard/pinjaman')
+  return { success: true, message: `Berhasil memproses payroll pinjaman! Sisa hutang untuk ${pinjamanIds.length} kontrak telah otomatis disesuaikan.` }
+}
