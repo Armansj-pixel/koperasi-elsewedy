@@ -5,6 +5,7 @@ import { requireRole } from '@/lib/auth/session'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { buatJurnalUmum } from '@/lib/akuntansi/actions' // <-- IMPORT MESIN JURNAL
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -232,7 +233,6 @@ export async function getPinjamanDetail(id: number) {
     approverMap = new Map(approvers?.map((a) => [a.id, a.nama]) ?? [])
   }
 
-  // Auto-Hitung untuk UI Detail
   const cicilanBelumLunas = cicilan?.filter(c => c.status === 'SCHEDULED' || c.status === 'OVERDUE') || [];
   const sisaKali = cicilanBelumLunas.length;
   const sisaOutstanding = pinjaman.status === 'ACTIVE' ? sisaKali * (Number(pinjaman.cicilan_per_bulan) || 0) : 0;
@@ -484,7 +484,7 @@ export async function approvePinjaman(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent(msg)}`)
 }
 
-// ─── ACTION: Cairkan Pinjaman ─────────────────────────────────────────────────
+// ─── ACTION: Cairkan Pinjaman + JURNAL AKUNTANSI ───────────────────────────────
 
 export async function cairkanPinjaman(formData: FormData) {
   const session = await requireRole(['BENDAHARA'])
@@ -506,6 +506,7 @@ export async function cairkanPinjaman(formData: FormData) {
 
   const tanggalMulai = tanggalCairan ? new Date(tanggalCairan) : new Date()
 
+  // 1. Update status pinjaman
   const { error: updateError } = await supabase
     .from('pinjaman')
     .update({
@@ -521,6 +522,7 @@ export async function cairkanPinjaman(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal mencairkan pinjaman: ' + updateError.message)}`)
   }
 
+  // 2. Generate jadwal cicilan
   const jadwal = generateJadwalCicilan(
     pinjamanId,
     pinjaman.nominal_pokok,
@@ -536,6 +538,7 @@ export async function cairkanPinjaman(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal generate jadwal cicilan: ' + cicilanError.message)}`)
   }
 
+  // 3. AUTO-SETTLEMENT TOP-UP
   if (pinjaman.pelunasan_pinjaman_lama_id) {
     const oldLoanId = pinjaman.pelunasan_pinjaman_lama_id
 
@@ -560,12 +563,34 @@ export async function cairkanPinjaman(formData: FormData) {
       .eq('id', oldLoanId)
   }
 
+  // 4. AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY) ------------------------------
+  const lines = [
+    { kode_akun: '111', debit: pinjaman.nominal_pokok, kredit: 0, user_id: pinjaman.user_id }, // Debit Piutang Baru
+    { kode_akun: '401', debit: 0, kredit: pinjaman.biaya_admin, user_id: pinjaman.user_id }    // Kredit Pendapatan Admin
+  ]
+
+  if (pinjaman.pelunasan_pinjaman_lama) {
+    lines.push({ kode_akun: '111', debit: 0, kredit: pinjaman.pelunasan_pinjaman_lama, user_id: pinjaman.user_id }) // Pelunasan Pokok Lama
+  }
+
+  lines.push({ kode_akun: '102-MND', debit: 0, kredit: pinjaman.nominal_diterima, user_id: pinjaman.user_id }) // Kas Keluar (Bank Mandiri)
+
+  await buatJurnalUmum({
+    nomor_bukti: `CAIR-${pinjaman.nomor_kontrak}`,
+    tanggal_transaksi: tanggalMulai.toISOString().split('T')[0],
+    keterangan: `Pencairan Pinjaman ${pinjaman.nomor_kontrak}${pinjaman.pelunasan_pinjaman_lama ? ' (Top-Up)' : ''}`,
+    jenis_sumber: 'PINJAMAN_CAIR',
+    id_sumber: pinjaman.id.toString(),
+    lines
+  });
+  // ----------------------------------------------------------------------
+
   revalidatePath('/dashboard/pinjaman')
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
-  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pencairan berhasil! Jadwal cicilan & pelunasan berjalan otomatis.')}`)
+  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pencairan berhasil! Jurnal Akuntansi otomatis tercatat.')}`)
 }
 
-// ─── ACTION: Bayar Cicilan (Bulanan Manual) ───────────────────────────────────
+// ─── ACTION: Bayar Cicilan (Bulanan Manual) + JURNAL AKUNTANSI ────────────────
 
 export async function bayarCicilan(formData: FormData) {
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
@@ -576,7 +601,11 @@ export async function bayarCicilan(formData: FormData) {
 
   const supabase = await createClient()
 
-  // 1. Ubah status cicilan menjadi PAID
+  // Ambil nominal cicilan
+  const { data: targetCicilan } = await supabase.from('cicilan_pinjaman').select('nominal_cicilan').eq('id', cicilanId).single();
+  const nominalBayar = Number(targetCicilan?.nominal_cicilan || 0);
+
+  // 1. Ubah status cicilan
   const { error: cicilanError } = await supabase
     .from('cicilan_pinjaman')
     .update({
@@ -590,7 +619,7 @@ export async function bayarCicilan(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal input pembayaran: ' + cicilanError.message)}`)
   }
 
-  // 2. AUTO-HEAL: Hitung ulang sisa tagihan secara real-time dan update ke Database
+  // 2. AUTO-HEAL: Update Induk
   const { data: sisaCicilanData } = await supabase
     .from('cicilan_pinjaman')
     .select('nominal_cicilan')
@@ -601,8 +630,7 @@ export async function bayarCicilan(formData: FormData) {
   const sisaPokok = sisaCicilanData?.reduce((sum, c) => sum + Number(c.nominal_cicilan), 0) || 0;
   const semuaLunas = sisaKali === 0;
 
-  // 3. Update Sisa Pokok di tabel Induk
-  await supabase
+  const { data: pinjamanUpdated } = await supabase
     .from('pinjaman')
     .update({ 
       sisa_cicilan: sisaKali,
@@ -612,13 +640,31 @@ export async function bayarCicilan(formData: FormData) {
       updated_at: new Date().toISOString() 
     })
     .eq('id', pinjamanId)
+    .select('user_id, nomor_kontrak')
+    .single()
+
+  // 3. AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY) ------------------------------
+  if (nominalBayar > 0 && pinjamanUpdated) {
+    await buatJurnalUmum({
+      nomor_bukti: `BYR-${pinjamanUpdated.nomor_kontrak}-C${cicilanId}`,
+      tanggal_transaksi: tanggalBayar,
+      keterangan: `Angsuran Manual Pinjaman ${pinjamanUpdated.nomor_kontrak}`,
+      jenis_sumber: 'MANUAL',
+      id_sumber: cicilanId.toString(),
+      lines: [
+        { kode_akun: '102-MND', debit: nominalBayar, kredit: 0, user_id: pinjamanUpdated.user_id }, // Bank Bertambah
+        { kode_akun: '111', debit: 0, kredit: nominalBayar, user_id: pinjamanUpdated.user_id }      // Piutang Berkurang
+      ]
+    });
+  }
+  // ----------------------------------------------------------------------
 
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
   revalidatePath('/dashboard/pinjaman')
-  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pembayaran berhasil dicatat. Sisa hutang langsung diperbarui!')}`)
+  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pembayaran berhasil & Jurnal tercatat.')}`)
 }
 
-// ─── ACTION: Pelunasan Pinjaman Sekaligus ─────────────────────────────────────
+// ─── ACTION: Pelunasan Pinjaman Sekaligus + JURNAL AKUNTANSI ──────────────────
 
 export async function pelunasanPinjamanSekaligus(formData: FormData) {
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
@@ -630,13 +676,22 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
 
   const { data: pinjaman, error: fetchError } = await supabase
     .from('pinjaman')
-    .select('status')
+    .select('status, nomor_kontrak, user_id')
     .eq('id', pinjamanId)
     .single()
 
   if (fetchError || !pinjaman || pinjaman.status !== 'ACTIVE') {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Pinjaman tidak dapat dilunasi. Pastikan statusnya Aktif.')}`)
   }
+
+  // Hitung total sisa yang akan dilunasi
+  const { data: cicilanSisa } = await supabase
+    .from('cicilan_pinjaman')
+    .select('nominal_cicilan')
+    .eq('pinjaman_id', pinjamanId)
+    .in('status', ['SCHEDULED', 'OVERDUE'])
+
+  const totalPelunasan = cicilanSisa?.reduce((sum, c) => sum + Number(c.nominal_cicilan), 0) || 0;
 
   // 1. Lunas Semua Cicilan
   const { error: cicilanError } = await supabase
@@ -668,9 +723,25 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
     redirect(`/dashboard/pinjaman/${pinjamanId}?error=${encodeURIComponent('Gagal menutup status pinjaman: ' + lunasError.message)}`)
   }
 
+  // 3. AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY) ------------------------------
+  if (totalPelunasan > 0) {
+    await buatJurnalUmum({
+      nomor_bukti: `LUNAS-${pinjaman.nomor_kontrak}`,
+      tanggal_transaksi: tanggalPelunasan,
+      keterangan: `Pelunasan Sekaligus Pinjaman ${pinjaman.nomor_kontrak}`,
+      jenis_sumber: 'MANUAL',
+      id_sumber: pinjamanId.toString(),
+      lines: [
+        { kode_akun: '102-MND', debit: totalPelunasan, kredit: 0, user_id: pinjaman.user_id },
+        { kode_akun: '111', debit: 0, kredit: totalPelunasan, user_id: pinjaman.user_id }
+      ]
+    });
+  }
+  // ----------------------------------------------------------------------
+
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
   revalidatePath('/dashboard/pinjaman')
-  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan berhasil diproses. Sisa hutang kini menjadi Rp 0.')}`)
+  redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan berhasil diproses & Jurnal tercatat.')}`)
 }
 
 // ─── ACTION: Input Pinjaman Existing ─────────────────────────────────────────
@@ -806,13 +877,14 @@ export async function getStatistikPinjaman() {
   }
 }
 
-// ─── ACTION: Sinkronisasi Pembayaran Massal (Payroll Pinjaman) ─────────────────
+// ─── ACTION: Sinkronisasi Pembayaran Massal (Payroll) + JURNAL ─────────────────
 
 export async function potongCicilanMassal(bulan: number, tahun: number) {
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
   const supabase = await createClient()
 
   const targetMonthStr = `${tahun}-${String(bulan).padStart(2, '0')}`
+  const tanggalJurnal = new Date().toISOString().split('T')[0]
 
   const { data: cicilanTertarget, error: fetchError } = await supabase
     .from('cicilan_pinjaman')
@@ -826,19 +898,20 @@ export async function potongCicilanMassal(bulan: number, tahun: number) {
   }
 
   const cicilanIds = cicilanTertarget.map(c => c.id)
+  const totalMassal = cicilanTertarget.reduce((sum, c) => sum + Number(c.nominal_cicilan), 0)
 
   // 1. Eksekusi pelunasan massal
   const { error: updateError } = await supabase
     .from('cicilan_pinjaman')
     .update({
       status: 'PAID',
-      tanggal_pembayaran: new Date().toISOString().split('T')[0]
+      tanggal_pembayaran: tanggalJurnal
     })
     .in('id', cicilanIds)
 
   if (updateError) return { success: false, message: "Gagal memproses pembayaran massal." }
 
-  // 2. AUTO-HEAL: Update Sisa Pokok seluruh Pinjaman Induk yang terdampak
+  // 2. AUTO-HEAL
   const pinjamanIds = [...new Set(cicilanTertarget.map(c => c.pinjaman_id))]
 
   for (const pId of pinjamanIds) {
@@ -857,12 +930,28 @@ export async function potongCicilanMassal(bulan: number, tahun: number) {
         sisa_cicilan: sisaKali,
         sisa_pokok: sisaPokok,
         status: sisaKali === 0 ? 'LUNAS' : 'ACTIVE', 
-        tanggal_lunas: sisaKali === 0 ? new Date().toISOString().split('T')[0] : null,
+        tanggal_lunas: sisaKali === 0 ? tanggalJurnal : null,
         updated_at: new Date().toISOString() 
       })
       .eq('id', pId)
   }
 
+  // 3. AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY) ------------------------------
+  if (totalMassal > 0) {
+    await buatJurnalUmum({
+      nomor_bukti: `PR-PINJ-${targetMonthStr.replace('-', '')}`,
+      tanggal_transaksi: tanggalJurnal,
+      keterangan: `Pemotongan Massal Payroll Angsuran Pinjaman ${targetMonthStr}`,
+      jenis_sumber: 'PAYROLL_MASSAL',
+      id_sumber: targetMonthStr,
+      lines: [
+        { kode_akun: '102-MND', debit: totalMassal, kredit: 0 },
+        { kode_akun: '111', debit: 0, kredit: totalMassal }
+      ]
+    });
+  }
+  // ----------------------------------------------------------------------
+
   revalidatePath('/dashboard/pinjaman')
-  return { success: true, message: `Berhasil memproses payroll pinjaman! Sisa hutang untuk ${pinjamanIds.length} kontrak telah otomatis disesuaikan.` }
+  return { success: true, message: `Berhasil memproses payroll pinjaman & Jurnal total Rp ${totalMassal.toLocaleString('id-ID')} otomatis tercatat!` }
 }
