@@ -21,7 +21,6 @@ const AnggotaSchema = z.object({
   role: z.enum(["ANGGOTA", "SEKRETARIS", "BENDAHARA", "KETUA", "SUPERADMIN"], {
     errorMap: () => ({ message: "Role tidak valid" }),
   }),
-  // Kolom lama dihapus, diganti dengan dua kolom ini:
   simpanan_wajib_bulanan: z.coerce.number().min(0).default(0),
   simpanan_sukarela_bulanan: z.coerce.number().min(0).default(0),
   tanggal_bergabung: z.string().optional().or(z.literal("")),
@@ -70,7 +69,6 @@ export async function getAnggotaList(search?: string) {
     const pinjaman = pinjamanList?.find((p) => p.user_id === user.id);
     const sisa_pinjaman = Number(pinjaman?.sisa_pokok || 0) + Number(pinjaman?.sisa_margin || 0);
 
-    // Fallback jika data lama masih menggunakan simpanan_bulanan
     const simpanan_bulanan = Number(user.simpanan_wajib_bulanan || user.simpanan_bulanan || 0);
     const is_active = user.is_active !== undefined ? user.is_active : true;
 
@@ -366,4 +364,125 @@ export async function resetPasswordAnggota(id: string) {
     success: true,
     message: `Password ${user.nama} berhasil direset. Password baru: ${newPassword}`,
   };
+}
+
+// =====================================================================
+// GET KALKULASI RESIGN / TUTUP KEANGGOTAAN
+// =====================================================================
+
+export async function getKalkulasiResign(userId: string) {
+  await requireRole(["SUPERADMIN", "BENDAHARA", "SEKRETARIS"]);
+  const supabase = createServiceClient();
+
+  // 1. Ambil Profil User
+  const { data: user } = await supabase
+    .from('users')
+    .select('id, nama, nik, is_active')
+    .eq('id', userId)
+    .single();
+
+  if (!user) return { error: "Pengguna tidak ditemukan" };
+
+  // 2. Ambil Total Simpanan (Menyesuaikan dengan nama kolom DB Anda)
+  const { data: simpanan } = await supabase
+    .from('saldo_simpanan')
+    .select('saldo_pokok, saldo_wajib, saldo_sukarela')
+    .eq('user_id', userId)
+    .single();
+
+  const totalSimpanan = 
+    (Number(simpanan?.saldo_pokok) || 0) + 
+    (Number(simpanan?.saldo_wajib) || 0) + 
+    (Number(simpanan?.saldo_sukarela) || 0);
+
+  // 3. Ambil Total Hutang Pinjaman Aktif
+  const { data: pinjamanAktif } = await supabase
+    .from('pinjaman')
+    .select('id, nomor_kontrak, sisa_pokok')
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE');
+
+  const totalHutangPinjaman = pinjamanAktif?.reduce((sum, p) => sum + (Number(p.sisa_pokok) || 0), 0) || 0;
+
+  // 4. Kalkulasi Net Settlement (Clearance)
+  const netKembalian = totalSimpanan - totalHutangPinjaman;
+
+  return {
+    user,
+    simpanan: simpanan || { saldo_pokok: 0, saldo_wajib: 0, saldo_sukarela: 0 },
+    pinjamanAktif: pinjamanAktif || [],
+    totalSimpanan,
+    totalHutangPinjaman,
+    netKembalian
+  };
+}
+
+// =====================================================================
+// EKSEKUSI TUTUP KEANGGOTAAN (RESIGN)
+// =====================================================================
+
+export async function eksekusiTutupKeanggotaan(formData: FormData) {
+  const session = await requireRole(['BENDAHARA', 'SUPERADMIN', 'SEKRETARIS']);
+  const supabase = createServiceClient();
+
+  const userId = formData.get('user_id') as string;
+  const catatan = formData.get('catatan') as string;
+
+  if (!userId) return { success: false, error: "ID Anggota tidak valid." };
+
+  const kalkulasi = await getKalkulasiResign(userId);
+  if (kalkulasi.error) return { success: false, error: kalkulasi.error };
+
+  // 1. Ubah status anggota menjadi Inaktif (Resign)
+  const { error: userError } = await supabase
+    .from('users')
+    .update({ 
+      is_active: false,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', userId);
+
+  if (userError) return { success: false, error: "Gagal menonaktifkan pengguna." };
+
+  // 2. Kosongkan Saldo Simpanan 
+  await supabase
+    .from('saldo_simpanan')
+    .update({
+      total_saldo: 0,
+      saldo_pokok: 0,
+      saldo_wajib: 0,
+      saldo_sukarela: 0,
+      last_updated: new Date().toISOString()
+    })
+    .eq('user_id', userId);
+
+  // 3. LUNASKAN paksa semua pinjaman aktif
+  if (kalkulasi.pinjamanAktif && kalkulasi.pinjamanAktif.length > 0) {
+    const pinjamanIds = kalkulasi.pinjamanAktif.map(p => p.id);
+
+    // Lunas cicilan yang belum dibayar
+    await supabase
+      .from('cicilan_pinjaman')
+      .update({
+        status: 'PAID',
+        tanggal_pembayaran: new Date().toISOString().split('T')[0]
+      })
+      .in('pinjaman_id', pinjamanIds)
+      .in('status', ['SCHEDULED', 'OVERDUE']);
+
+    // Tutup status pinjaman induk
+    await supabase
+      .from('pinjaman')
+      .update({
+        status: 'LUNAS',
+        tanggal_lunas: new Date().toISOString().split('T')[0],
+        catatan_l3: `[AUTO-SETTLEMENT RESIGN] ${catatan}`,
+        updated_at: new Date().toISOString()
+      })
+      .in('id', pinjamanIds);
+  }
+
+  revalidatePath('/dashboard/anggota');
+  revalidatePath(`/dashboard/anggota/${userId}`);
+  return { success: true, message: `Keanggotaan ${kalkulasi.user?.nama} berhasil ditutup dan diselesaikan.` };
 }
