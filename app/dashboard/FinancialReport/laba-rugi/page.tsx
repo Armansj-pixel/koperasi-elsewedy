@@ -1,6 +1,6 @@
 import React from "react";
 import { requireRole } from "@/lib/auth/session";
-import { getLaporanLabaRugi } from "@/lib/laporan/actions";
+import { getLaporanLabaRugi } from "@/lib/akuntansi/laporan";
 import Link from "next/link";
 
 const TAHUN_INI = new Date().getFullYear();
