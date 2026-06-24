@@ -363,8 +363,8 @@ export async function ajukanPenarikan(formData: FormData) {
   if (currentUser.role === "ANGGOTA") {
     const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
     const currentMinute = now.getHours() * 60 + now.getMinutes();
-    if (now.getDay() === 4 && currentMinute >= 9 * 60 && currentMinute < 15 * 60) {
-      return { success: false, error: "Gagal: Sedang dalam masa cut-off mingguan (Kamis 09:00 - 15:00 WIB)." };
+    if (now.getDay() === 5 && currentMinute >= 9 * 60 && currentMinute < 15 * 60) {
+      return { success: false, error: "Gagal: Sedang dalam masa cut-off mingguan (Jumat 09:00 - 15:00 WIB)." };
     }
   }
 
