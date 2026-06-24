@@ -187,7 +187,7 @@ export async function getRiwayatSimpanan(userId: string, limit: number = 20) {
 }
 
 // =====================================================================
-// INPUT SETORAN SIMPANAN (MANUAL) + JURNAL AKUNTANSI
+// INPUT SETORAN SIMPANAN (MANUAL) + JURNAL AKUNTANSI (REFACTORED)
 // =====================================================================
 
 export async function inputSetoran(formData: FormData) {
@@ -208,6 +208,10 @@ export async function inputSetoran(formData: FormData) {
   const data = parsed.data;
   const tanggalFinal = data.tanggal || new Date().toISOString().split("T")[0];
   const periodeFinal = formatPeriode(tanggalFinal);
+  
+  // REFACTOR: Format Nomor Bukti Standar Akuntansi
+  const prefix = data.jenis_simpanan === 'SIMPANAN_POKOK' ? 'SPK' : data.jenis_simpanan === 'SIMPANAN_WAJIB' ? 'SWJ' : 'SSR';
+  const nomorBuktiJurnal = `${prefix}-${periodeFinal.replace("-", "")}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   const keteranganLabel: Record<string, string> = {
     SIMPANAN_POKOK: "Simpanan pokok",
@@ -242,21 +246,20 @@ export async function inputSetoran(formData: FormData) {
 
   if (saldoError) return { success: false, error: saldoError.message };
 
-  // 3. AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY) ------------------------------
+  // 3. AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY)
   const akunKredit = data.jenis_simpanan === 'SIMPANAN_POKOK' ? '302' : data.jenis_simpanan === 'SIMPANAN_WAJIB' ? '303' : '201';
   
   await buatJurnalUmum({
-    nomor_bukti: `DEP-${data.jenis_simpanan.substring(9,12)}-${Date.now()}`,
+    nomor_bukti: nomorBuktiJurnal,
     tanggal_transaksi: tanggalFinal,
     keterangan: data.keterangan || `Setoran ${keteranganLabel[data.jenis_simpanan]} a/n ${user.nama}`,
     jenis_sumber: 'SIMPANAN_MANUAL',
     id_sumber: insertedRiwayat?.id?.toString() || '',
     lines: [
-      { kode_akun: '102-MND', debit: data.nominal, kredit: 0, user_id: data.user_id }, // Bank Bertambah (Debit)
-      { kode_akun: akunKredit, debit: 0, kredit: data.nominal, user_id: data.user_id } // Simpanan/Modal Bertambah (Kredit)
+      { kode_akun: '102-MND', debit: data.nominal, kredit: 0, user_id: data.user_id },
+      { kode_akun: akunKredit, debit: 0, kredit: data.nominal, user_id: data.user_id }
     ]
   });
-  // ----------------------------------------------------------------------
 
   revalidatePath("/dashboard/simpanan");
   revalidatePath(`/dashboard/simpanan/${data.user_id}`);
@@ -266,7 +269,7 @@ export async function inputSetoran(formData: FormData) {
 }
 
 // =====================================================================
-// SETORAN BULANAN MASSAL (POTONG GAJI - WAJIB & SUKARELA) + JURNAL
+// SETORAN BULANAN MASSAL (POTONG GAJI) + JURNAL (REFACTORED IDEMPOTENCY)
 // =====================================================================
 
 export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
@@ -283,15 +286,13 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
   const tanggal = `${tahun}-${String(bulan).padStart(2, "0")}-25`; 
   const periode = `${tahun}-${String(bulan).padStart(2, "0")}`;
   const namaBulan = new Date(tahun, bulan - 1).toLocaleString("id-ID", { month: "long", year: "numeric" });
+  
+  // REFACTOR: Kunci Idempotency Global
+  const idempotencyKeyWajib = `PR-WAJIB-${periode}`;
+  const idempotencyKeySukarela = `PR-SUKARELA-${periode}`;
 
-  let berhasilWajib = 0;
-  let berhasilSukarela = 0;
-  let dilewati = 0;
-  let gagal = 0;
-
-  // Tracker untuk Jurnal Massal
-  let totalWajibTerkumpul = 0;
-  let totalSukarelaTerkumpul = 0;
+  let berhasilWajib = 0; let berhasilSukarela = 0; let gagal = 0;
+  let totalWajibTerkumpul = 0; let totalSukarelaTerkumpul = 0;
 
   for (const anggota of anggotaList) {
     const wajib = Number(anggota.simpanan_wajib_bulanan || 0);
@@ -299,7 +300,7 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
 
     if (wajib === 0 && sukarela === 0) continue; 
 
-    // --- PROSES POTONGAN SIMPANAN WAJIB ---
+    // --- PROSES SIMPANAN WAJIB ---
     if (wajib > 0) {
       const { data: existWajib } = await supabase
         .from("simpanan")
@@ -307,12 +308,10 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
         .eq("user_id", anggota.id)
         .eq("jenis", "SETORAN")
         .eq("periode", periode)
-        .ilike("keterangan", "%Wajib Bulanan%")
+        .eq("keterangan", idempotencyKeyWajib) // Match exact Idempotency Key
         .maybeSingle();
 
-      if (existWajib) {
-        dilewati++;
-      } else {
+      if (!existWajib) {
         const { error: errWajib } = await supabase.from("simpanan").insert({
           user_id: anggota.id,
           jenis: "SETORAN",
@@ -320,21 +319,19 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
           periode,
           tanggal,
           status: "APPROVED",
-          keterangan: `Simpanan Wajib Bulanan ${namaBulan}`,
+          keterangan: idempotencyKeyWajib,
           created_by: currentUser.id,
         });
 
         if (!errWajib) {
           await updateSaldo(supabase, anggota.id, wajib, "SIMPANAN_WAJIB");
           berhasilWajib++;
-          totalWajibTerkumpul += wajib; // Catat untuk Jurnal
-        } else {
-          gagal++;
-        }
+          totalWajibTerkumpul += wajib;
+        } else gagal++;
       }
     }
 
-    // --- PROSES POTONGAN SIMPANAN SUKARELA ---
+    // --- PROSES SIMPANAN SUKARELA ---
     if (sukarela > 0) {
       const { data: existSukarela } = await supabase
         .from("simpanan")
@@ -342,12 +339,10 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
         .eq("user_id", anggota.id)
         .eq("jenis", "SETORAN")
         .eq("periode", periode)
-        .ilike("keterangan", "%Sukarela Bulanan%")
+        .eq("keterangan", idempotencyKeySukarela) 
         .maybeSingle();
 
-      if (existSukarela) {
-        // Terlewati diam-diam
-      } else {
+      if (!existSukarela) {
         const { error: errSukarela } = await supabase.from("simpanan").insert({
           user_id: anggota.id,
           jenis: "SETORAN",
@@ -355,46 +350,37 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
           periode,
           tanggal,
           status: "APPROVED",
-          keterangan: `Simpanan Sukarela Bulanan ${namaBulan}`,
+          keterangan: idempotencyKeySukarela, 
           created_by: currentUser.id,
         });
 
         if (!errSukarela) {
           await updateSaldo(supabase, anggota.id, sukarela, "SIMPANAN_SUKARELA");
           berhasilSukarela++;
-          totalSukarelaTerkumpul += sukarela; // Catat untuk Jurnal
-        } else {
-          gagal++;
-        }
+          totalSukarelaTerkumpul += sukarela;
+        } else gagal++;
       }
     }
   }
 
-  // AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY) ------------------------------
+  // AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY)
   const totalPayrollSimpanan = totalWajibTerkumpul + totalSukarelaTerkumpul;
 
   if (totalPayrollSimpanan > 0) {
-    const lines = [
-      { kode_akun: '102-MND', debit: totalPayrollSimpanan, kredit: 0 } // Kas Masuk Total (Debit)
-    ];
+    const lines = [{ kode_akun: '102-MND', debit: totalPayrollSimpanan, kredit: 0 }];
 
-    if (totalWajibTerkumpul > 0) {
-      lines.push({ kode_akun: '303', debit: 0, kredit: totalWajibTerkumpul }); // Modal Wajib (Kredit)
-    }
-    if (totalSukarelaTerkumpul > 0) {
-      lines.push({ kode_akun: '201', debit: 0, kredit: totalSukarelaTerkumpul }); // Kewajiban Sukarela (Kredit)
-    }
+    if (totalWajibTerkumpul > 0) lines.push({ kode_akun: '303', debit: 0, kredit: totalWajibTerkumpul });
+    if (totalSukarelaTerkumpul > 0) lines.push({ kode_akun: '201', debit: 0, kredit: totalSukarelaTerkumpul });
 
     await buatJurnalUmum({
-      nomor_bukti: `PR-SIMP-${tahun}${String(bulan).padStart(2,'0')}`,
+      nomor_bukti: `PR-SIMP-${periode.replace("-", "")}`,
       tanggal_transaksi: tanggal,
-      keterangan: `Pemotongan Massal Payroll Simpanan ${namaBulan}`,
+      keterangan: `Payroll Simpanan Wajib & Sukarela ${namaBulan}`,
       jenis_sumber: 'PAYROLL_MASSAL',
       id_sumber: periode,
       lines: lines
     });
   }
-  // ----------------------------------------------------------------------
 
   revalidatePath("/dashboard/simpanan");
   revalidatePath("/dashboard/anggota");
@@ -452,7 +438,7 @@ export async function ajukanPenarikan(formData: FormData) {
 }
 
 // =====================================================================
-// APPROVE / REJECT PENARIKAN + JURNAL AKUNTANSI
+// APPROVE / REJECT PENARIKAN + JURNAL AKUNTANSI (REFACTORED)
 // =====================================================================
 
 export async function updateStatusPenarikan(penarikanId: string, status: "APPROVED" | "REJECTED", catatan?: string) {
@@ -475,32 +461,35 @@ export async function updateStatusPenarikan(penarikanId: string, status: "APPROV
     const { error: saldoError } = await updateSaldo(supabase, penarikan.user_id, Number(penarikan.nominal), "PENARIKAN");
     if (saldoError) return { success: false, error: "Gagal mengurangi saldo sukarela." };
 
-        // 2. Catat Riwayat ke Simpanan
+    // 2. Catat Riwayat ke Simpanan
+    const tanggalCair = new Date().toISOString().split("T")[0];
     await supabase.from("simpanan").insert({
       user_id: penarikan.user_id,
       jenis: "PENARIKAN",
       nominal: penarikan.nominal,
-      periode: formatPeriode(new Date().toISOString().split("T")[0]),
-      tanggal: new Date().toISOString().split("T")[0],
+      periode: formatPeriode(tanggalCair),
+      tanggal: tanggalCair,
       status: "APPROVED",
       keterangan: "Penarikan simpanan (Dicairkan)",
       created_by: currentUser.id,
-      referensi_id: penarikanId, // Simpan referensi ke ID penarikan
+      referensi_id: penarikanId,
     });
 
-    // 3. AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY) ------------------------------
+    // 3. AUTO-JURNAL AKUNTANSI (DOUBLE ENTRY)
+    // REFACTOR: Nomor bukti terstandar untuk pencairan penarikan (contoh: WDS-202606-XXXX)
+    const nomorBuktiCair = `WDS-${tanggalCair.replace(/-/g, "").substring(0, 6)}-${Math.floor(1000 + Math.random() * 9000)}`;
+    
     await buatJurnalUmum({
-      nomor_bukti: `WD-SUK-${Date.now()}`,
-      tanggal_transaksi: new Date().toISOString().split("T")[0],
+      nomor_bukti: nomorBuktiCair,
+      tanggal_transaksi: tanggalCair,
       keterangan: catatan || "Pencairan Penarikan Simpanan Sukarela",
       jenis_sumber: 'MANUAL',
       id_sumber: penarikanId,
       lines: [
-        { kode_akun: '201', debit: Number(penarikan.nominal), kredit: 0, user_id: penarikan.user_id }, // Kewajiban/Simpanan Berkurang (Debit)
-        { kode_akun: '102-MND', debit: 0, kredit: Number(penarikan.nominal), user_id: penarikan.user_id } // Kas Berkurang/Keluar (Kredit)
+        { kode_akun: '201', debit: Number(penarikan.nominal), kredit: 0, user_id: penarikan.user_id },
+        { kode_akun: '102-MND', debit: 0, kredit: Number(penarikan.nominal), user_id: penarikan.user_id }
       ]
     });
-    // ----------------------------------------------------------------------
   }
 
   revalidatePath("/dashboard/simpanan");
@@ -523,4 +512,3 @@ export async function getListPenarikan(status?: string) {
   if (error) return { success: false, error: error.message, data: [] };
   return { success: true, data: data || [] };
 }
-
