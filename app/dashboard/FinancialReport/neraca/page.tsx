@@ -1,5 +1,5 @@
 // =====================================================================
-// FILE 1: app/dashboard/laporan/neraca/page.tsx
+// FILE 1: app/dashboard/laporan/neraca/page.tsx (SUDAH DIPERBAIKI)
 // =====================================================================
 import React from "react";
 import { requireRole } from "@/lib/auth/session";
@@ -7,6 +7,7 @@ import { getLaporanNeraca } from "@/lib/akuntansi/laporan";
 import Link from "next/link";
 
 function formatRp(n: number) {
+  if (typeof n !== 'number') return "Rp 0";
   return "Rp " + Math.abs(n).toLocaleString("id-ID");
 }
 
@@ -49,11 +50,18 @@ export default async function NeracaPage({
   const perTanggal = searchParams.per ?? today;
 
   const { data: neraca, error } = await getLaporanNeraca(perTanggal);
+  
+  // Tambahan proteksi jika neraca undefined tapi error tidak ter-trigger
   if (error || !neraca) {
-    return <div style={{ padding: 40, color: "#e11d48" }}>Gagal memuat neraca: {error}</div>;
+    return <div style={{ padding: 40, color: "#e11d48" }}>Gagal memuat neraca: {error || "Data kosong"}</div>;
   }
 
   const perLabel = new Date(perTanggal).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+
+  // Fallback variabel agar aman saat di-map
+  const asetLancar = neraca?.aset?.lancar || [];
+  const kewajibanItems = neraca?.kewajiban?.items || [];
+  const ekuitasItems = neraca?.ekuitas?.items || [];
 
   return (
     <main className="nr-shell" style={{ background: "#f8fafc", minHeight: "100vh" }}>
@@ -99,7 +107,7 @@ export default async function NeracaPage({
           <style>{`.print-kop { display: none; } @media print { .print-kop { display: block !important; } }`}</style>
 
           {/* Badge balance */}
-          {neraca.is_balanced
+          {neraca?.is_balanced
             ? <div className="nr-balance-ok">✓ Neraca seimbang — Aset = Kewajiban + Ekuitas</div>
             : <div className="nr-balance-err">⚠ Neraca tidak seimbang — periksa jurnal yang belum ter-posting</div>
           }
@@ -109,7 +117,10 @@ export default async function NeracaPage({
             <div className="nr-section">Aset</div>
             <table className="nr-table">
               <tbody>
-                {neraca.aset.lancar.map((a) => (
+                {asetLancar.length === 0 && (
+                  <tr><td colSpan={3} style={{ textAlign: "center", color: "#94a3b8", padding: 20 }}>Tidak ada data aset</td></tr>
+                )}
+                {asetLancar.map((a: any) => (
                   <tr key={a.kode_akun}>
                     <td style={{ color: "#3b82f6", fontWeight: 600, width: 90 }}>{a.kode_akun}</td>
                     <td style={{ color: "#334155" }}>{a.nama_akun}</td>
@@ -118,7 +129,7 @@ export default async function NeracaPage({
                 ))}
                 <tr className="nr-grandtotal">
                   <td colSpan={2} style={{ color: "#0f172a" }}>TOTAL ASET</td>
-                  <td style={{ textAlign: "right", color: "#0f172a" }}>{formatRp(neraca.aset.total_aset)}</td>
+                  <td style={{ textAlign: "right", color: "#0f172a" }}>{formatRp(neraca?.aset?.total_aset || 0)}</td>
                 </tr>
               </tbody>
             </table>
@@ -129,9 +140,9 @@ export default async function NeracaPage({
             <div className="nr-section">Kewajiban</div>
             <table className="nr-table">
               <tbody>
-                {neraca.kewajiban.items.length === 0
+                {kewajibanItems.length === 0
                   ? <tr><td colSpan={3} style={{ textAlign: "center", color: "#94a3b8", padding: 20 }}>Tidak ada kewajiban</td></tr>
-                  : neraca.kewajiban.items.map((k) => (
+                  : kewajibanItems.map((k: any) => (
                     <tr key={k.kode_akun}>
                       <td style={{ color: "#3b82f6", fontWeight: 600, width: 90 }}>{k.kode_akun}</td>
                       <td style={{ color: "#334155" }}>{k.nama_akun}</td>
@@ -141,7 +152,7 @@ export default async function NeracaPage({
                 }
                 <tr className="nr-subtotal">
                   <td colSpan={2} style={{ color: "#0f172a" }}>Total Kewajiban</td>
-                  <td style={{ textAlign: "right", color: "#0f172a" }}>{formatRp(neraca.kewajiban.total_kewajiban)}</td>
+                  <td style={{ textAlign: "right", color: "#0f172a" }}>{formatRp(neraca?.kewajiban?.total_kewajiban || 0)}</td>
                 </tr>
               </tbody>
             </table>
@@ -150,25 +161,28 @@ export default async function NeracaPage({
             <div className="nr-section">Ekuitas</div>
             <table className="nr-table">
               <tbody>
-                {neraca.ekuitas.items.map((e) => (
+                {ekuitasItems.length === 0 && (
+                   <tr><td colSpan={3} style={{ textAlign: "center", color: "#94a3b8", padding: 20 }}>Tidak ada ekuitas</td></tr>
+                )}
+                {ekuitasItems.map((e: any) => (
                   <tr key={e.kode_akun}>
                     <td style={{ color: "#3b82f6", fontWeight: 600, width: 90 }}>{e.kode_akun}</td>
                     <td style={{ color: "#334155" }}>{e.nama_akun}</td>
                     <td style={{ textAlign: "right", color: "#0f172a", fontWeight: 600 }}>{formatRp(e.saldo_akhir)}</td>
                   </tr>
                 ))}
-                {neraca.ekuitas.shu_berjalan !== 0 && (
+                {(neraca?.ekuitas?.shu_berjalan || 0) !== 0 && (
                   <tr>
                     <td style={{ color: "#3b82f6", fontWeight: 600, width: 90 }}>305</td>
                     <td style={{ color: "#334155" }}>SHU Tahun Berjalan</td>
-                    <td style={{ textAlign: "right", color: neraca.ekuitas.shu_berjalan >= 0 ? "#0f766e" : "#e11d48", fontWeight: 700 }}>
-                      {neraca.ekuitas.shu_berjalan >= 0 ? "" : "("}{formatRp(neraca.ekuitas.shu_berjalan)}{neraca.ekuitas.shu_berjalan >= 0 ? "" : ")"}
+                    <td style={{ textAlign: "right", color: neraca!.ekuitas!.shu_berjalan >= 0 ? "#0f766e" : "#e11d48", fontWeight: 700 }}>
+                      {neraca!.ekuitas!.shu_berjalan >= 0 ? "" : "("}{formatRp(neraca!.ekuitas!.shu_berjalan)}{neraca!.ekuitas!.shu_berjalan >= 0 ? "" : ")"}
                     </td>
                   </tr>
                 )}
                 <tr className="nr-subtotal">
                   <td colSpan={2} style={{ color: "#0f172a" }}>Total Ekuitas</td>
-                  <td style={{ textAlign: "right", color: "#0f172a" }}>{formatRp(neraca.ekuitas.total_ekuitas)}</td>
+                  <td style={{ textAlign: "right", color: "#0f172a" }}>{formatRp(neraca?.ekuitas?.total_ekuitas || 0)}</td>
                 </tr>
               </tbody>
             </table>
@@ -177,8 +191,8 @@ export default async function NeracaPage({
               <tbody>
                 <tr className="nr-grandtotal">
                   <td colSpan={2} style={{ color: "#0f172a" }}>TOTAL KEWAJIBAN + EKUITAS</td>
-                  <td style={{ textAlign: "right", color: neraca.is_balanced ? "#0f766e" : "#e11d48" }}>
-                    {formatRp(neraca.total_kewajiban_ekuitas)}
+                  <td style={{ textAlign: "right", color: neraca?.is_balanced ? "#0f766e" : "#e11d48" }}>
+                    {formatRp(neraca?.total_kewajiban_ekuitas || 0)}
                   </td>
                 </tr>
               </tbody>
@@ -189,4 +203,3 @@ export default async function NeracaPage({
     </main>
   );
 }
-
