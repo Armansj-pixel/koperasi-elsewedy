@@ -409,16 +409,21 @@ export default async function PinjamanDetailPage({
                   </div>
 
                   {/* Bank & Rekening */}
-                  <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: "12px", borderBottom: "1px dashed #f1f5f9" }}>
-                    <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "600" }}>Bank Tujuan</span>
-                    <span style={{ fontSize: "14px", fontWeight: "700", color: "#1e293b" }}>{p.user_bank || '-'}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "600" }}>No. Rekening</span>
-                    <span style={{ fontSize: "14px", fontWeight: "800", color: "#0f172a", fontFamily: "monospace", letterSpacing: ".05em" }}>
-                      {p.user_nomor_rekening || '-'}
-                    </span>
-                  </div>
+<div style={{ display: "flex", justifyContent: "space-between", paddingBottom: "12px", borderBottom: "1px dashed #f1f5f9" }}>
+  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "600" }}>Bank Tujuan</span>
+  {/* UBAH DI SINI: Coba panggil lewat p.users?.bank */}
+  <span style={{ fontSize: "14px", fontWeight: "700", color: "#1e293b" }}>
+     {p.user_bank || p.users?.bank || '-'}
+  </span>
+</div>
+<div style={{ display: "flex", justifyContent: "space-between" }}>
+  <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "600" }}>No. Rekening</span>
+  {/* UBAH DI SINI: Coba panggil lewat p.users?.nomor_rekening */}
+  <span style={{ fontSize: "14px", fontWeight: "800", color: "#0f172a", fontFamily: "monospace", letterSpacing: ".05em" }}>
+    {p.user_nomor_rekening || p.users?.nomor_rekening || '-'}
+  </span>
+</div>
+
                 </div>
               </div>
 
