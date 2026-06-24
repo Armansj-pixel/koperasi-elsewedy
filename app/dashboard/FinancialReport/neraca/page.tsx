@@ -190,27 +190,3 @@ export default async function NeracaPage({
   );
 }
 
-
-// =====================================================================
-// FILE 2: app/dashboard/laporan/shu/page.tsx
-// Simpan file ini terpisah di path tersebut
-// =====================================================================
-
-/*
-"use server" tidak berlaku di page.tsx — ini komponen server biasa.
-Actions untuk SHU ada di: app/dashboard/laporan/shu/actions.ts
-*/
-
-export async function SHUPageContent({
-  tahun,
-  sudahTutup,
-  simulasi,
-}: {
-  tahun: number;
-  sudahTutup: boolean;
-  simulasi: any;
-}) {
-  // Komponen ini di-render dari page.tsx SHU
-  // Lihat file shu-page.tsx terpisah
-  return null;
-}
