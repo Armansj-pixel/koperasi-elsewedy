@@ -99,7 +99,7 @@ export async function simulasiAlokasiSHU(
       alokasi_dana_cadangan,
       alokasi_modal_koperasi,
       alokasi_parsel_lebaran,
-      total_alokasi: alokasi_dana_angan + alokasi_modal_koperasi + alokasi_parsel_lebaran,
+      total_alokasi: alokasi_dana_cadangan + alokasi_modal_koperasi + alokasi_parsel_lebaran,
       is_valid: true,
     },
     error: null,
