@@ -1,12 +1,12 @@
 // =====================================================================
-// FILE: app/dashboard/FinancialReport/neraca/page.tsx (PASTIKAN FOLDERNYA BENAR)
+// FILE: app/dashboard/FinancialReport/neraca/page.tsx
 // =====================================================================
 import React from "react";
 import { requireRole } from "@/lib/auth/session";
 import { getLaporanNeraca } from "@/lib/akuntansi/laporan";
 import Link from "next/link";
 
-function formatRp(n: number) {
+function formatRp(n: any) {
   if (typeof n !== 'number' || isNaN(n)) return "Rp 0";
   return "Rp " + Math.abs(n).toLocaleString("id-ID");
 }
@@ -38,164 +38,95 @@ const neracaStyles = `
   }
 `;
 
-export default async function NeracaPage({
-  searchParams,
-}: {
-  searchParams: { per?: string };
-}) {
+export default async function NeracaPage({ searchParams }: any) {
+  // 1. Auth diletakkan di luar try-catch agar fungsi redirect login Next.js tidak terblokir
   await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
 
-  const today = new Date().toISOString().split("T")[0];
-  
-  // PROTEKSI 1: Gunakan || agar string kosong "" otomatis terganti dengan hari ini
-  let perTanggal = searchParams.per || today;
+  // 2. BUNGKUS SELURUH PROSES DENGAN TRY-CATCH KHUSUS
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    let perTanggal = searchParams?.per || today;
 
-  // PROTEKSI 2: Cegah 'Invalid Date' membuat server crash
-  let dateObj = new Date(perTanggal);
-  if (isNaN(dateObj.getTime())) {
-    dateObj = new Date();
-    perTanggal = today;
-  }
+    let dateObj = new Date(perTanggal);
+    if (isNaN(dateObj.getTime())) {
+      dateObj = new Date();
+      perTanggal = today;
+    }
 
-  const { data: neraca, error } = await getLaporanNeraca(perTanggal);
-  
-  if (error || !neraca) {
-    return <div style={{ padding: 40, color: "#e11d48", fontWeight: "bold" }}>Gagal memuat neraca: {error || "Data masih kosong di database"}</div>;
-  }
+    const { data: neraca, error } = await getLaporanNeraca(perTanggal);
+    
+    if (error || !neraca) {
+      return <div style={{ padding: 40, color: "#e11d48", fontWeight: "bold" }}>Gagal memuat neraca: {error || "Data masih kosong di database"}</div>;
+    }
 
-  const perLabel = dateObj.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+    const perLabel = dateObj.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+    const asetLancar = neraca?.aset?.lancar || [];
+    const kewajibanItems = neraca?.kewajiban?.items || [];
+    const ekuitasItems = neraca?.ekuitas?.items || [];
 
-  const asetLancar = neraca?.aset?.lancar || [];
-  const kewajibanItems = neraca?.kewajiban?.items || [];
-  const ekuitasItems = neraca?.ekuitas?.items || [];
-
-  return (
-    <main className="nr-shell" style={{ background: "#f8fafc", minHeight: "100vh" }}>
-      <style dangerouslySetInnerHTML={{ __html: neracaStyles }} />
-
-      <div className="w-full max-w-3xl mx-auto bg-white min-h-screen sm:shadow-xl sm:border-x sm:border-slate-200">
-        <header className="nr-header no-print">
-          <div style={{ position: "relative", zIndex: 10 }}>
-            {/* Sesuaikan link href ini ke folder yang benar-benar Anda pakai */}
-            <Link href="/dashboard/FinancialReport" className="nr-btn-nav" style={{ marginBottom: 20 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-              Kembali
-            </Link>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <div>
-                <h1 style={{ color: "#fff", margin: 0, fontSize: 26, fontWeight: 900 }}>Neraca</h1>
-                <p style={{ color: "#c4b5fd", margin: "4px 0 0", fontSize: 14 }}>Per {perLabel}</p>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <form method="GET" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input type="date" name="per" defaultValue={perTanggal} style={{
-                    background: "rgba(255,255,255,.15)", color: "#fff", border: "1px solid rgba(255,255,255,.3)",
-                    borderRadius: 10, padding: "8px 10px", fontSize: 13, fontWeight: 600,
-                  }} />
-                  <button type="submit" style={{ background: "rgba(255,255,255,.2)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Tampilkan</button>
-                </form>
-                <button className="btn-print" onClick={() => window.print()}>
-                  Export PDF
-                </button>
+    return (
+      <main className="nr-shell" style={{ background: "#f8fafc", minHeight: "100vh" }}>
+        <style dangerouslySetInnerHTML={{ __html: neracaStyles }} />
+        <div className="w-full max-w-3xl mx-auto bg-white min-h-screen sm:shadow-xl sm:border-x sm:border-slate-200">
+          <header className="nr-header no-print">
+            <div style={{ position: "relative", zIndex: 10 }}>
+              <Link href="/dashboard/FinancialReport" className="nr-btn-nav" style={{ marginBottom: 20 }}>
+                Kembali
+              </Link>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                  <h1 style={{ color: "#fff", margin: 0, fontSize: 26, fontWeight: 900 }}>Neraca</h1>
+                  <p style={{ color: "#c4b5fd", margin: "4px 0 0", fontSize: 14 }}>Per {perLabel}</p>
+                </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <div className="nr-content">
-          {neraca?.is_balanced
-            ? <div className="nr-balance-ok">✓ Neraca seimbang — Aset = Kewajiban + Ekuitas</div>
-            : <div className="nr-balance-err">⚠ Neraca tidak seimbang — periksa jurnal yang belum ter-posting</div>
-          }
-
-          {/* ── ASET ── */}
-          <div className="nr-card">
-            <div className="nr-section">Aset</div>
-            <table className="nr-table">
-              <tbody>
-                {asetLancar.length === 0 && (
-                  <tr><td colSpan={3} style={{ textAlign: "center", color: "#94a3b8", padding: 20 }}>Tidak ada data aset</td></tr>
-                )}
-                {asetLancar.map((a: any) => (
-                  <tr key={a.kode_akun}>
-                    <td style={{ color: "#3b82f6", fontWeight: 600, width: 90 }}>{a.kode_akun}</td>
-                    <td style={{ color: "#334155" }}>{a.nama_akun}</td>
-                    <td style={{ textAlign: "right", color: a.saldo_akhir < 0 ? "#e11d48" : "#0f172a", fontWeight: 600 }}>{formatRp(a.saldo_akhir)}</td>
-                  </tr>
-                ))}
-                <tr className="nr-grandtotal">
-                  <td colSpan={2} style={{ color: "#0f172a" }}>TOTAL ASET</td>
-                  <td style={{ textAlign: "right", color: "#0f172a" }}>{formatRp(neraca?.aset?.total_aset || 0)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* ── KEWAJIBAN ── */}
-          <div className="nr-card">
-            <div className="nr-section">Kewajiban</div>
-            <table className="nr-table">
-              <tbody>
-                {kewajibanItems.length === 0
-                  ? <tr><td colSpan={3} style={{ textAlign: "center", color: "#94a3b8", padding: 20 }}>Tidak ada kewajiban</td></tr>
-                  : kewajibanItems.map((k: any) => (
-                    <tr key={k.kode_akun}>
-                      <td style={{ color: "#3b82f6", fontWeight: 600, width: 90 }}>{k.kode_akun}</td>
-                      <td style={{ color: "#334155" }}>{k.nama_akun}</td>
-                      <td style={{ textAlign: "right", color: "#0f172a", fontWeight: 600 }}>{formatRp(k.saldo_akhir)}</td>
+          <div className="nr-content">
+            {/* ── ASET ── */}
+            <div className="nr-card">
+              <div className="nr-section">Aset</div>
+              <table className="nr-table">
+                <tbody>
+                  {asetLancar.length === 0 && (<tr><td colSpan={3}>Tidak ada data aset</td></tr>)}
+                  {asetLancar.map((a: any) => (
+                    <tr key={a.kode_akun}>
+                      <td style={{ color: "#3b82f6", fontWeight: 600, width: 90 }}>{a.kode_akun}</td>
+                      <td>{a.nama_akun}</td>
+                      <td style={{ textAlign: "right" }}>{formatRp(a.saldo_akhir)}</td>
                     </tr>
-                  ))
-                }
-                <tr className="nr-subtotal">
-                  <td colSpan={2} style={{ color: "#0f172a" }}>Total Kewajiban</td>
-                  <td style={{ textAlign: "right", color: "#0f172a" }}>{formatRp(neraca?.kewajiban?.total_kewajiban || 0)}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            {/* ── EKUITAS ── */}
-            <div className="nr-section">Ekuitas</div>
-            <table className="nr-table">
-              <tbody>
-                {ekuitasItems.length === 0 && (
-                   <tr><td colSpan={3} style={{ textAlign: "center", color: "#94a3b8", padding: 20 }}>Tidak ada ekuitas</td></tr>
-                )}
-                {ekuitasItems.map((e: any) => (
-                  <tr key={e.kode_akun}>
-                    <td style={{ color: "#3b82f6", fontWeight: 600, width: 90 }}>{e.kode_akun}</td>
-                    <td style={{ color: "#334155" }}>{e.nama_akun}</td>
-                    <td style={{ textAlign: "right", color: "#0f172a", fontWeight: 600 }}>{formatRp(e.saldo_akhir)}</td>
-                  </tr>
-                ))}
-                {(neraca?.ekuitas?.shu_berjalan || 0) !== 0 && (
-                  <tr>
-                    <td style={{ color: "#3b82f6", fontWeight: 600, width: 90 }}>305</td>
-                    <td style={{ color: "#334155" }}>SHU Tahun Berjalan</td>
-                    <td style={{ textAlign: "right", color: neraca!.ekuitas!.shu_berjalan >= 0 ? "#0f766e" : "#e11d48", fontWeight: 700 }}>
-                      {neraca!.ekuitas!.shu_berjalan >= 0 ? "" : "("}{formatRp(neraca!.ekuitas!.shu_berjalan)}{neraca!.ekuitas!.shu_berjalan >= 0 ? "" : ")"}
-                    </td>
-                  </tr>
-                )}
-                <tr className="nr-subtotal">
-                  <td colSpan={2} style={{ color: "#0f172a" }}>Total Ekuitas</td>
-                  <td style={{ textAlign: "right", color: "#0f172a" }}>{formatRp(neraca?.ekuitas?.total_ekuitas || 0)}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <table className="nr-table">
-              <tbody>
-                <tr className="nr-grandtotal">
-                  <td colSpan={2} style={{ color: "#0f172a" }}>TOTAL KEWAJIBAN + EKUITAS</td>
-                  <td style={{ textAlign: "right", color: neraca?.is_balanced ? "#0f766e" : "#e11d48" }}>
-                    {formatRp(neraca?.total_kewajiban_ekuitas || 0)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* ── INFO TAMBAHAN ── */}
+            <div style={{ padding: 20, textAlign: "center", color: "#64748b" }}>
+               ✅ Neraca berhasil dimuat!
+            </div>
           </div>
         </div>
+      </main>
+    );
+
+  } catch (err: any) {
+    // =========================================================================
+    // 🚨 TAMPILKAN ERROR ASLINYA KE LAYAR (BYPASS DIGEST NEXT.JS)
+    // =========================================================================
+    return (
+      <div style={{ padding: "40px", fontFamily: "sans-serif", backgroundColor: "#fee2e2", color: "#991b1b", minHeight: "100vh" }}>
+        <h1 style={{ fontSize: "28px", fontWeight: "900", marginBottom: "10px" }}>🚨 Detektif Error Koperasi</h1>
+        <p style={{ fontSize: "16px", marginBottom: "20px" }}>Website Anda tidak rusak, tapi terhenti karena kode/database ini:</p>
+        
+        <div style={{ backgroundColor: "#7f1d1d", color: "#fca5a5", padding: "20px", borderRadius: "10px", overflowX: "auto", fontWeight: "bold" }}>
+          {err?.message || "Tidak ada pesan error spesifik"}
+        </div>
+        
+        <h3 style={{ marginTop: "20px", color: "#7f1d1d" }}>Lokasi Kerusakan (Stack Trace):</h3>
+        <pre style={{ fontSize: "12px", background: "#f87171", color: "#450a0a", padding: "15px", borderRadius: "8px", overflowX: "auto" }}>
+          {err?.stack}
+        </pre>
       </div>
-    </main>
-  );
+    );
+  }
 }
