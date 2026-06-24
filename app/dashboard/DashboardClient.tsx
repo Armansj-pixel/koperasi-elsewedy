@@ -95,7 +95,7 @@ const modules: Module[] = [
     isActive: true,
     bg: "#ffe4e6",
     iconColor: "#be123c",
-    desc: "Analitik & rekap",
+    desc: "Rekap Pemotongan Gaji Karyawan",
     allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"],
   },
   {
