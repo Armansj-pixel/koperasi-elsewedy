@@ -100,7 +100,7 @@ export default async function LaporanDashboardPage({
               <div>
                 <h1 style={{ color: "#fff", margin: 0, fontSize: 28, fontWeight: 900, letterSpacing: "-.02em" }}>Laporan Keuangan</h1>
                 <p style={{ color: "#94a3b8", margin: "4px 0 0", fontSize: 14, fontWeight: 500 }}>
-                  Koperasi Karyawan PT. CGPSI — {stats?.periode_label}
+                  Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia — {stats?.periode_label}
                 </p>
               </div>
               {/* Selector Tahun */}
@@ -183,13 +183,13 @@ export default async function LaporanDashboardPage({
           <p style={{ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: ".06em", margin: "8px 0 12px" }}>Laporan Keuangan</p>
           <div className="nav-grid">
             <NavCard
-              href={`/dashboard/laporan/laba-rugi?tahun=${tahun}`}
+              href={`/dashboard/FinancialReport/laba-rugi?tahun=${tahun}`}
               title="Laporan Laba / Rugi"
               desc={`Pendapatan & beban tahun ${tahun} — export PDF`}
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>}
             />
             <NavCard
-              href={`/dashboard/laporan/neraca?per=${tahun}-12-31`}
+              href={`/dashboard/FinancialReport/neraca?per=${tahun}-12-31`}
               title="Neraca (Balance Sheet)"
               desc="Posisi aset, kewajiban & ekuitas — export PDF"
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>}
