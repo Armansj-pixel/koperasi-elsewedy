@@ -1,5 +1,5 @@
 // =====================================================================
-// FILE 1: app/dashboard/laporan/neraca/page.tsx (SUDAH DIPERBAIKI)
+// FILE: app/dashboard/FinancialReport/neraca/page.tsx (PASTIKAN FOLDERNYA BENAR)
 // =====================================================================
 import React from "react";
 import { requireRole } from "@/lib/auth/session";
@@ -7,7 +7,7 @@ import { getLaporanNeraca } from "@/lib/akuntansi/laporan";
 import Link from "next/link";
 
 function formatRp(n: number) {
-  if (typeof n !== 'number') return "Rp 0";
+  if (typeof n !== 'number' || isNaN(n)) return "Rp 0";
   return "Rp " + Math.abs(n).toLocaleString("id-ID");
 }
 
@@ -36,7 +36,6 @@ const neracaStyles = `
     .nr-card { box-shadow: none; }
     @page { margin: 15mm; }
   }
-  @media(min-width:768px) { .nr-header { padding: 40px 32px 90px; } .nr-content { padding: 0 32px 40px; } }
 `;
 
 export default async function NeracaPage({
@@ -47,18 +46,25 @@ export default async function NeracaPage({
   await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
 
   const today = new Date().toISOString().split("T")[0];
-  const perTanggal = searchParams.per ?? today;
+  
+  // PROTEKSI 1: Gunakan || agar string kosong "" otomatis terganti dengan hari ini
+  let perTanggal = searchParams.per || today;
+
+  // PROTEKSI 2: Cegah 'Invalid Date' membuat server crash
+  let dateObj = new Date(perTanggal);
+  if (isNaN(dateObj.getTime())) {
+    dateObj = new Date();
+    perTanggal = today;
+  }
 
   const { data: neraca, error } = await getLaporanNeraca(perTanggal);
   
-  // Tambahan proteksi jika neraca undefined tapi error tidak ter-trigger
   if (error || !neraca) {
-    return <div style={{ padding: 40, color: "#e11d48" }}>Gagal memuat neraca: {error || "Data kosong"}</div>;
+    return <div style={{ padding: 40, color: "#e11d48", fontWeight: "bold" }}>Gagal memuat neraca: {error || "Data masih kosong di database"}</div>;
   }
 
-  const perLabel = new Date(perTanggal).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  const perLabel = dateObj.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 
-  // Fallback variabel agar aman saat di-map
   const asetLancar = neraca?.aset?.lancar || [];
   const kewajibanItems = neraca?.kewajiban?.items || [];
   const ekuitasItems = neraca?.ekuitas?.items || [];
@@ -70,9 +76,10 @@ export default async function NeracaPage({
       <div className="w-full max-w-3xl mx-auto bg-white min-h-screen sm:shadow-xl sm:border-x sm:border-slate-200">
         <header className="nr-header no-print">
           <div style={{ position: "relative", zIndex: 10 }}>
-            <Link href="/dashboard/laporan" className="nr-btn-nav" style={{ marginBottom: 20 }}>
+            {/* Sesuaikan link href ini ke folder yang benar-benar Anda pakai */}
+            <Link href="/dashboard/FinancialReport" className="nr-btn-nav" style={{ marginBottom: 20 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-              Laporan
+              Kembali
             </Link>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div>
@@ -88,7 +95,6 @@ export default async function NeracaPage({
                   <button type="submit" style={{ background: "rgba(255,255,255,.2)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Tampilkan</button>
                 </form>
                 <button className="btn-print" onClick={() => window.print()}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                   Export PDF
                 </button>
               </div>
@@ -97,16 +103,6 @@ export default async function NeracaPage({
         </header>
 
         <div className="nr-content">
-          {/* Kop print */}
-          <div style={{ textAlign: "center", padding: "24px 0 8px", display: "none" }} className="print-kop">
-            <div style={{ fontSize: 16, fontWeight: 900 }}>KOPERASI KARYAWAN PT. CGPSI</div>
-            <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>NERACA (BALANCE SHEET)</div>
-            <div style={{ fontSize: 12, color: "#475569" }}>Per {perLabel}</div>
-            <div style={{ borderBottom: "2px solid #0f172a", margin: "12px 0" }} />
-          </div>
-          <style>{`.print-kop { display: none; } @media print { .print-kop { display: block !important; } }`}</style>
-
-          {/* Badge balance */}
           {neraca?.is_balanced
             ? <div className="nr-balance-ok">✓ Neraca seimbang — Aset = Kewajiban + Ekuitas</div>
             : <div className="nr-balance-err">⚠ Neraca tidak seimbang — periksa jurnal yang belum ter-posting</div>
