@@ -24,7 +24,7 @@ export interface LaporanLabaRugi {
   total_pendapatan: number;
   beban: AkunSaldo[];
   total_beban: number;
-  shu_bersih: number; // SHU = Total Pendapatan - Total Beban
+  shu_bersih: number;
 }
 
 export interface NerацaItem {
@@ -45,28 +45,23 @@ export interface LaporanNeraca {
   };
   ekuitas: {
     items: NerацaItem[];
-    shu_berjalan: number; // Ditambahkan dari L/R
+    shu_berjalan: number;
     total_ekuitas: number;
   };
   total_kewajiban_ekuitas: number;
-  is_balanced: boolean; // Aset = Kewajiban + Ekuitas
+  is_balanced: boolean;
 }
 
 export interface DashboardStats {
-  // Posisi keuangan
   total_aset: number;
   total_kas_bank: number;
   total_piutang: number;
-  // Simpanan anggota
   total_simpanan_pokok: number;
   total_simpanan_wajib: number;
   total_simpanan_sukarela: number;
-  // Pinjaman
   total_outstanding_pinjaman: number;
   total_pinjaman_aktif: number;
-  // SHU
   shu_tahun_berjalan: number;
-  // Periode
   periode_label: string;
 }
 
@@ -85,7 +80,6 @@ async function getSaldoAkun(
 
   if (!accounts) return [];
 
-  // Tarik jurnal induk sesuai periode
   const { data: indukList } = await supabase
     .from("jurnal_induk")
     .select("id")
@@ -95,6 +89,7 @@ async function getSaldoAkun(
   const indukIds = indukList?.map((i: any) => i.id) ?? [];
   let rincian: { akun_id: string; debit: number; kredit: number }[] = [];
 
+  // Proteksi: Hanya panggil rincian jika ada induk (mencegah error .in array kosong di Supabase)
   if (indukIds.length > 0) {
     const { data } = await supabase
       .from("jurnal_rincian")
@@ -105,8 +100,10 @@ async function getSaldoAkun(
 
   return accounts.map((akun: any) => {
     const trxs = rincian.filter((r) => r.akun_id === akun.id);
-    const totalDebit = trxs.reduce((s: number, t: any) => s + Number(t.debit), 0);
-    const totalKredit = trxs.reduce((s: number, t: any) => s + Number(t.kredit), 0);
+    // Proteksi fallback ke 0 jika database mengembalikan nilai null/undefined
+    const totalDebit = trxs.reduce((s: number, t: any) => s + Number(t.debit || 0), 0);
+    const totalKredit = trxs.reduce((s: number, t: any) => s + Number(t.kredit || 0), 0);
+    
     const saldo_akhir =
       akun.saldo_normal === "DEBIT"
         ? totalDebit - totalKredit
@@ -123,8 +120,6 @@ async function getSaldoAkun(
 
 // =====================================================================
 // GET LAPORAN LABA RUGI
-// Periode: 1 Jan s.d. 31 Des (atau custom)
-// SHU = Total Pendapatan (4xx) - Total Beban (5xx)
 // =====================================================================
 export async function getLaporanLabaRugi(
   tahun: number,
@@ -134,8 +129,10 @@ export async function getLaporanLabaRugi(
   await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
-  const start = startDate ?? `${tahun}-01-01`;
-  const end = endDate ?? `${tahun}-12-31`;
+  // Pastikan tahun adalah angka valid (fallback ke tahun berjalan jika NaN)
+  const safeTahun = isNaN(tahun) ? new Date().getFullYear() : tahun;
+  const start = startDate ?? `${safeTahun}-01-01`;
+  const end = endDate ?? `${safeTahun}-12-31`;
 
   const akunSaldo = await getSaldoAkun(supabase, start, end);
 
@@ -146,11 +143,19 @@ export async function getLaporanLabaRugi(
   const total_beban = beban.reduce((s, a) => s + a.saldo_akhir, 0);
   const shu_bersih = total_pendapatan - total_beban;
 
-  const bulanStart = new Date(start).toLocaleString("id-ID", { month: "long", year: "numeric" });
-  const bulanEnd = new Date(end).toLocaleString("id-ID", { month: "long", year: "numeric" });
-  const periode_label = start === `${tahun}-01-01` && end === `${tahun}-12-31`
-    ? `Tahun ${tahun}`
-    : `${bulanStart} s.d. ${bulanEnd}`;
+  // Proteksi Try-Catch agar Invalid Date tidak membuat server crash (Error 500)
+  let bulanStartLabel = start;
+  let bulanEndLabel = end;
+  try {
+    bulanStartLabel = new Date(start).toLocaleString("id-ID", { month: "long", year: "numeric" });
+    bulanEndLabel = new Date(end).toLocaleString("id-ID", { month: "long", year: "numeric" });
+  } catch (error) {
+    console.error("Kesalahan format tanggal Laba Rugi:", error);
+  }
+
+  const periode_label = start === `${safeTahun}-01-01` && end === `${safeTahun}-12-31`
+    ? `Tahun ${safeTahun}`
+    : `${bulanStartLabel} s.d. ${bulanEndLabel}`;
 
   return {
     data: { periode_label, pendapatan, total_pendapatan, beban, total_beban, shu_bersih },
@@ -160,8 +165,6 @@ export async function getLaporanLabaRugi(
 
 // =====================================================================
 // GET NERACA (BALANCE SHEET)
-// Per tanggal tertentu — akumulasi dari awal hingga tanggal tsb
-// Termasuk SHU berjalan dari L/R tahun berjalan
 // =====================================================================
 export async function getLaporanNeraca(
   perTanggal: string
@@ -169,15 +172,18 @@ export async function getLaporanNeraca(
   await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
-  // Neraca menggunakan saldo akumulatif dari awal hingga per_tanggal
-  const akunSaldo = await getSaldoAkun(supabase, "1900-01-01", perTanggal);
+  // Validasi keamanan tanggal (Mencegah input string kosong/salah dari URL param)
+  let validDate = new Date(perTanggal);
+  if (isNaN(validDate.getTime())) {
+    validDate = new Date(); // Paksa ke tanggal hari ini jika invalid
+  }
+  const safePerTanggal = validDate.toISOString().split("T")[0];
+  const tahunIni = validDate.getFullYear();
 
-  // Ambil SHU berjalan dari L/R tahun berjalan (1 Jan tahun ini s.d. per_tanggal)
-  const tahunIni = new Date(perTanggal).getFullYear();
-  const labaRugi = await getLaporanLabaRugi(tahunIni, `${tahunIni}-01-01`, perTanggal);
+  const akunSaldo = await getSaldoAkun(supabase, "1900-01-01", safePerTanggal);
+  const labaRugi = await getLaporanLabaRugi(tahunIni, `${tahunIni}-01-01`, safePerTanggal);
   const shu_berjalan = labaRugi.data?.shu_bersih ?? 0;
 
-  // Kelompokkan per tipe akun
   const aset = akunSaldo
     .filter((a) => a.tipe_akun === "ASSET" && a.saldo_akhir !== 0)
     .map((a) => ({ kode_akun: a.kode_akun, nama_akun: a.nama_akun, saldo_akhir: a.saldo_akhir }));
@@ -186,8 +192,6 @@ export async function getLaporanNeraca(
     .filter((a) => a.tipe_akun === "LIABILITY" && a.saldo_akhir !== 0)
     .map((a) => ({ kode_akun: a.kode_akun, nama_akun: a.nama_akun, saldo_akhir: a.saldo_akhir }));
 
-  // Ekuitas: dari COA (simpanan pokok, wajib, modal, cadangan, SHU belum dibagi)
-  // EXCLUDE akun L/R (revenue/expense) karena sudah diringkas jadi SHU berjalan
   const ekuitas = akunSaldo
     .filter((a) => a.tipe_akun === "EQUITY" && a.saldo_akhir !== 0)
     .map((a) => ({ kode_akun: a.kode_akun, nama_akun: a.nama_akun, saldo_akhir: a.saldo_akhir }));
@@ -201,7 +205,7 @@ export async function getLaporanNeraca(
 
   return {
     data: {
-      per_tanggal: perTanggal,
+      per_tanggal: safePerTanggal,
       aset: { lancar: aset, total_aset },
       kewajiban: { items: kewajiban, total_kewajiban },
       ekuitas: { items: ekuitas, shu_berjalan, total_ekuitas },
@@ -221,9 +225,11 @@ export async function getDashboardStats(
   await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
-  const perTanggal = `${tahun}-12-31`;
+  const safeTahun = isNaN(tahun) ? new Date().getFullYear() : tahun;
+  const perTanggal = `${safeTahun}-12-31`;
+  
   const akunSaldo = await getSaldoAkun(supabase, "1900-01-01", perTanggal);
-  const labaRugi = await getLaporanLabaRugi(tahun);
+  const labaRugi = await getLaporanLabaRugi(safeTahun);
 
   const cari = (kode: string) =>
     akunSaldo.find((a) => a.kode_akun === kode)?.saldo_akhir ?? 0;
@@ -237,7 +243,6 @@ export async function getDashboardStats(
     .filter((a) => a.tipe_akun === "ASSET")
     .reduce((s, a) => s + a.saldo_akhir, 0);
 
-  // Ambil data pinjaman aktif dari tabel operasional
   const { data: pinjamanAktif } = await supabase
     .from("pinjaman")
     .select("id, cicilan_per_bulan")
@@ -254,7 +259,7 @@ export async function getDashboardStats(
   });
 
   const total_outstanding_pinjaman = (pinjamanAktif ?? []).reduce(
-    (s: number, p: any) => s + (countMap[p.id] || 0) * Number(p.cicilan_per_bulan),
+    (s: number, p: any) => s + (countMap[p.id] || 0) * Number(p.cicilan_per_bulan || 0),
     0
   );
 
@@ -269,7 +274,7 @@ export async function getDashboardStats(
       total_outstanding_pinjaman,
       total_pinjaman_aktif: pinjamanAktif?.length ?? 0,
       shu_tahun_berjalan: labaRugi.data?.shu_bersih ?? 0,
-      periode_label: `Per 31 Desember ${tahun}`,
+      periode_label: `Per 31 Desember ${safeTahun}`,
     },
     error: null,
   };
