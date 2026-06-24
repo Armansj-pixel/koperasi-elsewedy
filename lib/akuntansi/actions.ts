@@ -5,31 +5,56 @@ import { requireRole } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+// =====================================================================
+// HELPER: GENERATE NOMOR BUKTI SEQUENTIAL (AUDIT READY)
+// Format: PREFIX-YYYYMM-0001
+// =====================================================================
+export async function generateNomorBukti(prefix: string, tanggal: string) {
+  const supabase = createServiceClient();
+  const dateObj = new Date(tanggal);
+  const yyyymm = `${dateObj.getFullYear()}${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+  const searchPrefix = `${prefix}-${yyyymm}-`;
+
+  const { data } = await supabase
+    .from('jurnal_induk')
+    .select('nomor_bukti')
+    .like('nomor_bukti', `${searchPrefix}%`)
+    .order('nomor_bukti', { ascending: false })
+    .limit(1);
+
+  let seq = 1;
+  if (data && data.length > 0) {
+    const lastSeqStr = data[0].nomor_bukti.split('-').pop();
+    seq = parseInt(lastSeqStr || '0') + 1;
+  }
+  return `${searchPrefix}${String(seq).padStart(4, '0')}`;
+}
+
+// =====================================================================
+// CORE ENGINE: BUAT JURNAL UMUM (ATOMIC & IDEMPOTENT)
+// =====================================================================
 interface JurnalLineInput {
-  kode_akun: string; // Contoh: '111', '102-MND'
+  kode_akun: string; 
   debit: number;
   kredit: number;
-  user_id?: string;  // Sub-ledger opsional per anggota koperasi
+  user_id?: string;  
 }
 
 interface BuatJurnalInput {
-  nomor_bukti: string;      // Contoh: 'PINJ-20260601', 'PAY-BULANAN'
-  tanggal_transaksi: string; // Format: 'YYYY-MM-DD'
+  nomor_bukti?: string;      
+  prefix_bukti?: string;     // Gunakan ini untuk auto-generate nomor bukti
+  tanggal_transaksi: string; 
   keterangan: string;
-  jenis_sumber: 'PINJAMAN_CAIR' | 'PAYROLL_MASSAL' | 'MANUAL' | 'RESIGN' | 'SIMPANAN_MANUAL';
-  id_sumber?: string;        // ID baris pinjaman/simpanan terkait
+  jenis_sumber: string;      // Fleksibel untuk berbagai jenis modul
+  id_sumber?: string;        
   lines: JurnalLineInput[];
 }
 
-/**
- * CORE ENGINE: Fungsi Global Pembuat Jurnal Umum Double-Entry
- */
 export async function buatJurnalUmum(input: BuatJurnalInput) {
-  // Hanya pengurus keuangan dan superadmin yang bisa memicu jurnal
   const session = await requireRole(["BENDAHARA", "SUPERADMIN", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
-  const { nomor_bukti, tanggal_transaksi, keterangan, jenis_sumber, id_sumber, lines } = input;
+  const { prefix_bukti, tanggal_transaksi, keterangan, jenis_sumber, id_sumber, lines } = input;
 
   // 1. Validasi Keamanan: Hitung total Balance
   let totalDebit = 0;
@@ -41,52 +66,38 @@ export async function buatJurnalUmum(input: BuatJurnalInput) {
   }
 
   if (Math.round(totalDebit) !== Math.round(totalKredit)) {
-    return {
-      success: false,
-      error: `Jurnal tidak seimbang (Unbalanced)! Total Debit: Rp ${totalDebit.toLocaleString()}, Total Kredit: Rp ${totalKredit.toLocaleString()}`,
-    };
+    return { success: false, error: `Jurnal Unbalanced! Debit: ${totalDebit}, Kredit: ${totalKredit}` };
   }
 
   try {
-    // 2. Ambil semua data akun perkiraan untuk mencocokkan kode_akun -> akun_id
-    const { data: listAkun, error: akunError } = await supabase
-      .from("akun_perkiraan")
-      .select("id, kode_akun");
-
-    if (akunError || !listAkun) {
-      return { success: false, error: "Gagal mengambil master Chart of Accounts." };
+    // 2. Tentukan Nomor Bukti (Auto Generate jika ada prefix)
+    let finalNomorBukti = input.nomor_bukti;
+    if (prefix_bukti) {
+      finalNomorBukti = await generateNomorBukti(prefix_bukti, tanggal_transaksi);
     }
 
+    if (!finalNomorBukti) return { success: false, error: "Nomor bukti atau prefix harus diisi." };
+
+    // 3. Cek Idempotency (Cegah Jurnal Ganda jika diklik 2x)
+    const { data: exist } = await supabase
+      .from("jurnal_induk")
+      .select("id")
+      .eq("nomor_bukti", finalNomorBukti)
+      .maybeSingle();
+
+    if (exist) {
+      return { success: true, jurnalIndukId: exist.id, message: "Jurnal sudah ada (Idempotent)." };
+    }
+
+    // 4. Map Kode Akun ke ID Akun
+    const { data: listAkun } = await supabase.from("akun_perkiraan").select("id, kode_akun");
+    if (!listAkun) return { success: false, error: "Gagal mengambil Chart of Accounts." };
     const akunMap = new Map(listAkun.map((a) => [a.kode_akun, a.id]));
 
-    // 3. Masukkan ke tabel induk (jurnal_induk)
-    const { data: induk, error: headerError } = await supabase
-      .from("jurnal_induk")
-      .insert({
-        nomor_bukti,
-        tanggal_transaksi,
-        keterangan,
-        jenis_sumber,
-        id_sumber,
-        created_by: session.id,
-      })
-      .select("id")
-      .single();
-
-    if (headerError || !induk) {
-      // Jika nomor bukti duplikat atau gagal insert
-      return { success: false, error: `Gagal mencatat induk jurnal: ${headerError?.message}` };
-    }
-
-    // 4. Siapkan data baris rincian (jurnal_rincian)
-    const rincianRows = lines.map((line) => {
+    const formattedLines = lines.map((line) => {
       const akunId = akunMap.get(line.kode_akun);
-      if (!akunId) {
-        throw new Error(`Kode akun '${line.kode_akun}' tidak ditemukan di master perkiraan.`);
-      }
-
+      if (!akunId) throw new Error(`Kode akun '${line.kode_akun}' tidak valid.`);
       return {
-        jurnal_induk_id: induk.id,
         akun_id: akunId,
         debit: line.debit,
         kredit: line.kredit,
@@ -94,48 +105,45 @@ export async function buatJurnalUmum(input: BuatJurnalInput) {
       };
     });
 
-    // 5. Masukkan rincian secara massal (bulk insert)
-    const { error: linesError } = await supabase
-      .from("jurnal_rincian")
-      .insert(rincianRows);
+    // 5. Atomic Insert menggunakan Stored Procedure (Data tidak akan bocor/korup)
+    const { data: rpcData, error: rpcError } = await supabase.rpc('insert_jurnal_atomic', {
+      p_nomor_bukti: finalNomorBukti,
+      p_tanggal: tanggal_transaksi,
+      p_keterangan: keterangan,
+      p_jenis_sumber: jenis_sumber,
+      p_id_sumber: id_sumber || null,
+      p_created_by: session.id,
+      p_lines: formattedLines
+    });
 
-    if (linesError) {
-      // Rollback manual dengan menghapus header jika lines gagal (opsional karena di sub-query)
-      await supabase.from("jurnal_induk").delete().eq("id", induk.id);
-      return { success: false, error: `Gagal mencatat rincian jurnal: ${linesError.message}` };
-    }
+    if (rpcError) throw new Error(`Database Error: ${rpcError.message}`);
 
     revalidatePath("/dashboard/akuntansi");
-    return { success: true, jurnalIndukId: induk.id };
+    return { success: true, jurnalIndukId: rpcData };
 
   } catch (err: any) {
     return { success: false, error: err.message || "Terjadi kesalahan sistem akuntansi." };
   }
 }
 
-/**
- * AMBIL DATA DAFTAR COA (Untuk Dropdown Form Manual dll)
- */
+// =====================================================================
+// AMBIL DATA DAFTAR COA
+// =====================================================================
 export async function getChartOfAccounts() {
   await requireRole(["BENDAHARA", "SUPERADMIN", "SEKRETARIS", "KETUA"]);
   const supabase = createServiceClient();
-
-  const { data, error } = await supabase
-    .from("akun_perkiraan")
-    .select("*")
-    .order("kode_akun", { ascending: true });
-
+  const { data, error } = await supabase.from("akun_perkiraan").select("*").order("kode_akun", { ascending: true });
   return { data: data || [], error: error?.message || null };
 }
-// ==// =====================================================================
+
+// =====================================================================
 // 1. ACTION: TOP-UP KAS KECIL (TARIK TUNAI DARI BANK)
 // =====================================================================
-
 const TopUpSchema = z.object({
   nominal: z.coerce.number().min(1000, "Minimal tarik tunai Rp 1.000"),
-  sumber_bank: z.string().min(1, "Sumber bank wajib dipilih"), // Contoh: '102-MND'
+  sumber_bank: z.string().min(1, "Sumber bank wajib dipilih"),
   tanggal: z.string(),
-  keterangan: z.string().optional() // TypeScript menganggap ini bisa 'undefined'
+  keterangan: z.string().optional()
 });
 
 export async function topUpKasKecil(formData: FormData) {
@@ -153,11 +161,9 @@ export async function topUpKasKecil(formData: FormData) {
 
   const { nominal, sumber_bank, tanggal, keterangan } = parsed.data;
 
-  // Panggil Core Engine Jurnal
   const result = await buatJurnalUmum({
-    nomor_bukti: `CASHTOPUP-${Date.now()}`,
+    prefix_bukti: `CASHTOPUP`, // Menggunakan generator squensial
     tanggal_transaksi: tanggal,
-    // PERBAIKAN DI SINI: Kita beri nilai default jika keterangan undefined
     keterangan: keterangan || "Tarik tunai untuk pengisian Kas Kecil", 
     jenis_sumber: 'MANUAL',
     lines: [
@@ -169,15 +175,13 @@ export async function topUpKasKecil(formData: FormData) {
   return result;
 }
 
-
 // =====================================================================
 // 2. ACTION: PENGELUARAN BIAYA OPERASIONAL
 // =====================================================================
-
 const PengeluaranSchema = z.object({
   nominal: z.coerce.number().min(500, "Minimal pengeluaran Rp 500"),
-  akun_biaya: z.string().min(1, "Jenis biaya wajib dipilih"), // Contoh: '501', '504', '505'
-  sumber_dana: z.enum(['101', '102-MND', '102-MAY', '102-BRIS']), // Pakai kas tunai atau transfer bank?
+  akun_biaya: z.string().min(1, "Jenis biaya wajib dipilih"),
+  sumber_dana: z.enum(['101', '102-MND', '102-MAY', '102-BRIS']),
   tanggal: z.string(),
   keterangan: z.string().min(3, "Keterangan pengeluaran wajib diisi")
 });
@@ -188,7 +192,7 @@ export async function catatPengeluaranOperasional(formData: FormData) {
   const raw = {
     nominal: formData.get("nominal"),
     akun_biaya: formData.get("akun_biaya") as string,
-    sumber_dana: formData.get("sumber_dana") as string || "101", // Default pakai uang laci (Kas Tunai)
+    sumber_dana: formData.get("sumber_dana") as string || "101",
     tanggal: (formData.get("tanggal") as string) || new Date().toISOString().split("T")[0],
     keterangan: formData.get("keterangan") as string
   };
@@ -198,24 +202,64 @@ export async function catatPengeluaranOperasional(formData: FormData) {
 
   const { nominal, akun_biaya, sumber_dana, tanggal, keterangan } = parsed.data;
 
-  // Panggil Core Engine Jurnal
   const result = await buatJurnalUmum({
-    nomor_bukti: `EXP-${Date.now()}`,
+    prefix_bukti: `EXP`, // Menggunakan generator squensial
     tanggal_transaksi: tanggal,
     keterangan: keterangan,
     jenis_sumber: 'MANUAL',
     lines: [
-      { kode_akun: akun_biaya, debit: nominal, kredit: 0 },      // Biaya Bertambah (Debit)
-      { kode_akun: sumber_dana, debit: 0, kredit: nominal }      // Harta Berkurang (Kredit)
+      { kode_akun: akun_biaya, debit: nominal, kredit: 0 },      // Biaya Bertambah
+      { kode_akun: sumber_dana, debit: 0, kredit: nominal }      // Harta Berkurang
     ]
   });
 
   return result;
 }
-// =====================================================================
-// 3. GET LAPORAN JURNAL UMUM
-// =====================================================================
 
+// =====================================================================
+// 3. ACTION: CATAT PEMASUKAN / PENDAPATAN LAINNYA
+// =====================================================================
+const PendapatanSchema = z.object({
+  nominal: z.coerce.number().min(500, "Minimal pendapatan Rp 500"),
+  akun_pendapatan: z.string().min(1, "Jenis pendapatan wajib dipilih"),
+  tujuan_dana: z.enum(['101', '102-MND', '102-MAY', '102-BRIS']),
+  tanggal: z.string(),
+  keterangan: z.string().min(3, "Keterangan pendapatan wajib diisi")
+});
+
+export async function catatPendapatanLain(formData: FormData) {
+  const session = await requireRole(["BENDAHARA", "SUPERADMIN"]);
+  
+  const raw = {
+    nominal: formData.get("nominal"),
+    akun_pendapatan: formData.get("akun_pendapatan") as string,
+    tujuan_dana: formData.get("tujuan_dana") as string || "102-MND",
+    tanggal: (formData.get("tanggal") as string) || new Date().toISOString().split("T")[0],
+    keterangan: formData.get("keterangan") as string
+  };
+
+  const parsed = PendapatanSchema.safeParse(raw);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+
+  const { nominal, akun_pendapatan, tujuan_dana, tanggal, keterangan } = parsed.data;
+
+  const result = await buatJurnalUmum({
+    prefix_bukti: `INC`, // Menggunakan generator squensial
+    tanggal_transaksi: tanggal,
+    keterangan: keterangan,
+    jenis_sumber: 'MANUAL',
+    lines: [
+      { kode_akun: tujuan_dana, debit: nominal, kredit: 0 },         // Kas/Bank Bertambah
+      { kode_akun: akun_pendapatan, debit: 0, kredit: nominal }      // Pendapatan Bertambah
+    ]
+  });
+
+  return result;
+}
+
+// =====================================================================
+// GET LAPORAN JURNAL UMUM
+// =====================================================================
 export async function getJurnalUmum(limit = 100) {
   await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
   const supabase = createServiceClient();
@@ -237,27 +281,28 @@ export async function getJurnalUmum(limit = 100) {
 }
 
 // =====================================================================
-// 4. GET NERACA SALDO (TRIAL BALANCE)
+// GET NERACA SALDO (TRIAL BALANCE) DENGAN FILTER PERIODE
 // =====================================================================
-
-export async function getNeracaSaldo() {
+export async function getNeracaSaldo(startDate?: string, endDate?: string) {
   await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
-  // 1. Ambil semua akun
   const { data: accounts } = await supabase
     .from("akun_perkiraan")
     .select("*")
     .order("kode_akun", { ascending: true });
   
-  // 2. Ambil semua rincian transaksi yang pernah terjadi
-  const { data: rincian } = await supabase
-    .from("jurnal_rincian")
-    .select("akun_id, debit, kredit");
-
   if (!accounts) return { data: [] };
 
-  // 3. Kalkulasi Saldo Akhir per Akun
+  // Tarik rincian jurnal beserta tanggal dari jurnal induk
+  let query = supabase.from("jurnal_rincian").select("akun_id, debit, kredit, jurnal_induk!inner(tanggal_transaksi)");
+
+  // Terapkan cut-off filter periode jika ada
+  if (startDate) query = query.gte("jurnal_induk.tanggal_transaksi", startDate);
+  if (endDate) query = query.lte("jurnal_induk.tanggal_transaksi", endDate);
+
+  const { data: rincian } = await query;
+
   const neraca = accounts.map(akun => {
     const trxs = rincian?.filter(r => r.akun_id === akun.id) || [];
     const totalDebit = trxs.reduce((sum, t) => sum + Number(t.debit), 0);
@@ -267,62 +312,4 @@ export async function getNeracaSaldo() {
     if (akun.saldo_normal === 'DEBIT') {
       saldo_akhir = totalDebit - totalKredit;
     } else {
-      saldo_akhir = totalKredit - totalDebit;
-    }
-
-    return {
-      ...akun,
-      total_debit: totalDebit,
-      total_kredit: totalKredit,
-      saldo_akhir
-    };
-  });
-
-  // Filter hanya akun yang pernah ada transaksinya (saldo tidak 0)
-  const activeNeraca = neraca.filter(n => n.total_debit > 0 || n.total_kredit > 0 || n.saldo_akhir !== 0);
-
-  return { data: activeNeraca };
-}
-
-// =====================================================================
-// 3. ACTION: CATAT PEMASUKAN / PENDAPATAN LAINNYA
-// =====================================================================
-
-const PendapatanSchema = z.object({
-  nominal: z.coerce.number().min(500, "Minimal pendapatan Rp 500"),
-  akun_pendapatan: z.string().min(1, "Jenis pendapatan wajib dipilih"), // Contoh: '402', '403', '404'
-  tujuan_dana: z.enum(['101', '102-MND', '102-MAY', '102-BRIS']), // Uangnya masuk ke mana?
-  tanggal: z.string(),
-  keterangan: z.string().min(3, "Keterangan pendapatan wajib diisi")
-});
-
-export async function catatPendapatanLain(formData: FormData) {
-  const session = await requireRole(["BENDAHARA", "SUPERADMIN"]);
-  
-  const raw = {
-    nominal: formData.get("nominal"),
-    akun_pendapatan: formData.get("akun_pendapatan") as string,
-    tujuan_dana: formData.get("tujuan_dana") as string || "102-MND", // Default masuk ke Mandiri
-    tanggal: (formData.get("tanggal") as string) || new Date().toISOString().split("T")[0],
-    keterangan: formData.get("keterangan") as string
-  };
-
-  const parsed = PendapatanSchema.safeParse(raw);
-  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
-
-  const { nominal, akun_pendapatan, tujuan_dana, tanggal, keterangan } = parsed.data;
-
-  // Panggil Core Engine Jurnal
-  const result = await buatJurnalUmum({
-    nomor_bukti: `INC-${Date.now()}`,
-    tanggal_transaksi: tanggal,
-    keterangan: keterangan,
-    jenis_sumber: 'MANUAL',
-    lines: [
-      { kode_akun: tujuan_dana, debit: nominal, kredit: 0 },         // Kas/Bank Bertambah (Debit)
-      { kode_akun: akun_pendapatan, debit: 0, kredit: nominal }      // Pendapatan Bertambah (Kredit)
-    ]
-  });
-
-  return result;
-}
+      saldo_akhir = totalK
