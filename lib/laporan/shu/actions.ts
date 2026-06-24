@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { buatJurnalUmum } from "@/lib/akuntansi/actions";
-import { getLaporanLabaRugi } from "@/lib/laporan/actions";
+import { getLaporanLabaRugi } from "@/lib/akuntansi/laporan";
 
 // =====================================================================
 // TYPES
