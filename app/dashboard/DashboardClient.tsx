@@ -129,6 +129,16 @@ const modules: Module[] = [
     allowedRoles: ["SUPERADMIN", "BENDAHARA", "SEKRETARIS", "KETUA"],
   },
   {
+    icon: "⚖️",
+    label: "Laporan Finansial",
+    href: "/dashboard/FinancialReport",
+    isActive: true,
+    bg: "#ffe4e6",
+    iconColor: "#be123c",
+    desc: "Analitik Keuangan",
+    allowedRoles: ["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"],
+  },
+  {
     icon: "🩺",
     label: "System Health",
     href: "/dashboard/superadmin/health",
