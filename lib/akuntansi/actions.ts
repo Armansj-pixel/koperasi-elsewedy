@@ -162,13 +162,13 @@ export async function topUpKasKecil(formData: FormData) {
   const { nominal, sumber_bank, tanggal, keterangan } = parsed.data;
 
   const result = await buatJurnalUmum({
-    prefix_bukti: `CASHTOPUP`, // Menggunakan generator squensial
+    prefix_bukti: `CASHTOPUP`, 
     tanggal_transaksi: tanggal,
     keterangan: keterangan || "Tarik tunai untuk pengisian Kas Kecil", 
     jenis_sumber: 'MANUAL',
     lines: [
-      { kode_akun: '101', debit: nominal, kredit: 0 },         // Kas Tunai Bertambah
-      { kode_akun: sumber_bank, debit: 0, kredit: nominal }    // Saldo Bank Berkurang
+      { kode_akun: '101', debit: nominal, kredit: 0 },         
+      { kode_akun: sumber_bank, debit: 0, kredit: nominal }    
     ]
   });
 
@@ -203,13 +203,13 @@ export async function catatPengeluaranOperasional(formData: FormData) {
   const { nominal, akun_biaya, sumber_dana, tanggal, keterangan } = parsed.data;
 
   const result = await buatJurnalUmum({
-    prefix_bukti: `EXP`, // Menggunakan generator squensial
+    prefix_bukti: `EXP`, 
     tanggal_transaksi: tanggal,
     keterangan: keterangan,
     jenis_sumber: 'MANUAL',
     lines: [
-      { kode_akun: akun_biaya, debit: nominal, kredit: 0 },      // Biaya Bertambah
-      { kode_akun: sumber_dana, debit: 0, kredit: nominal }      // Harta Berkurang
+      { kode_akun: akun_biaya, debit: nominal, kredit: 0 },      
+      { kode_akun: sumber_dana, debit: 0, kredit: nominal }      
     ]
   });
 
@@ -244,13 +244,13 @@ export async function catatPendapatanLain(formData: FormData) {
   const { nominal, akun_pendapatan, tujuan_dana, tanggal, keterangan } = parsed.data;
 
   const result = await buatJurnalUmum({
-    prefix_bukti: `INC`, // Menggunakan generator squensial
+    prefix_bukti: `INC`, 
     tanggal_transaksi: tanggal,
     keterangan: keterangan,
     jenis_sumber: 'MANUAL',
     lines: [
-      { kode_akun: tujuan_dana, debit: nominal, kredit: 0 },         // Kas/Bank Bertambah
-      { kode_akun: akun_pendapatan, debit: 0, kredit: nominal }      // Pendapatan Bertambah
+      { kode_akun: tujuan_dana, debit: nominal, kredit: 0 },         
+      { kode_akun: akun_pendapatan, debit: 0, kredit: nominal }      
     ]
   });
 
@@ -312,4 +312,18 @@ export async function getNeracaSaldo(startDate?: string, endDate?: string) {
     if (akun.saldo_normal === 'DEBIT') {
       saldo_akhir = totalDebit - totalKredit;
     } else {
-      saldo_akhir = totalK
+      saldo_akhir = totalKredit - totalDebit;
+    }
+
+    return {
+      ...akun,
+      total_debit: totalDebit,
+      total_kredit: totalKredit,
+      saldo_akhir
+    };
+  });
+
+  const activeNeraca = neraca.filter(n => n.total_debit > 0 || n.total_kredit > 0 || n.saldo_akhir !== 0);
+
+  return { data: activeNeraca };
+}
