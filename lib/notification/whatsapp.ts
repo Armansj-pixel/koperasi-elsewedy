@@ -123,7 +123,7 @@ export async function notifPencairanPinjaman(params: {
   tanggalCair: string;
 }) {
   const pesan = `
-🏦 *KOPERASI KARYAWAN PT. CGPSI*
+🏦 *KOPERASI JASA KARYAWAN PT. ELSEWEDY ELECTRIC INDONESIA*
 ━━━━━━━━━━━━━━━━━━━━
 *NOTIFIKASI PENCAIRAN PINJAMAN*
 
@@ -145,7 +145,7 @@ Jatuh Tempo   : Setiap tanggal 25
 Harap mempersiapkan dana angsuran sebelum tanggal pemotongan gaji.
 
 Terima kasih atas kepercayaan Anda.
-_Koperasi Karyawan PT. CGPSI_
+_Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia_
 `.trim();
 
   return kirimWA(params.noHp, pesan);
@@ -163,7 +163,7 @@ export async function notifAngsuranManual(params: {
 }) {
   const lunas = params.sisaCicilan === 0;
   const pesan = `
-🏦 *KOPERASI KARYAWAN PT. CGPSI*
+🏦 *KOPERASI JASA KARYAWAN PT. ELSEWEDY ELECTRIC INDONESIA*
 ━━━━━━━━━━━━━━━━━━━━
 *KONFIRMASI PEMBAYARAN ANGSURAN*
 
@@ -181,7 +181,7 @@ ${lunas
 }
 
 Terima kasih.
-_Koperasi Karyawan PT. CGPSI_
+_Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia_
 `.trim();
 
   return kirimWA(params.noHp, pesan);
@@ -201,7 +201,7 @@ export function templatePayrollAngsuran(params: {
   const lunas = params.sisaCicilan === 0;
 
   return `
-🏦 *KOPERASI KARYAWAN PT. CGPSI*
+🏦 *KOPERASI JASA KARYAWAN PT. ELSEWEDY ELECTRIC INDONESIA*
 ━━━━━━━━━━━━━━━━━━━━
 *PEMOTONGAN GAJI — ANGSURAN PINJAMAN*
 Periode: ${namaBulan}
@@ -218,7 +218,7 @@ ${lunas
   : `📊 Sisa Angsuran : ${params.sisaCicilan}x lagi\n💰 Sisa Pokok    : ${fRp(params.sisaPokok)}`
 }
 
-_Koperasi Karyawan PT. CGPSI_
+_Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia_
 `.trim();
 }
 
@@ -234,7 +234,7 @@ export function templatePayrollSimpanan(params: {
   const namaBulan = new Date(Number(tahun), Number(bulan) - 1).toLocaleString("id-ID", { month: "long", year: "numeric" });
 
   return `
-🏦 *KOPERASI KARYAWAN PT. CGPSI*
+🏦 *KOPERASI JASA KARYAWAN PT. ELSEWEDY ELECTRIC INDONESIA*
 ━━━━━━━━━━━━━━━━━━━━
 *PEMOTONGAN GAJI — SIMPANAN*
 Periode: ${namaBulan}
@@ -250,7 +250,7 @@ Simpanan bulanan Anda telah dipotong melalui payroll.
 
 Ketik *SALDO* untuk cek saldo simpanan terkini.
 
-_Koperasi Karyawan PT. CGPSI_
+_Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia_
 `.trim();
 }
 
@@ -270,7 +270,7 @@ export async function notifSetoranManual(params: {
   };
 
   const pesan = `
-🏦 *KOPERASI KARYAWAN PT. CGPSI*
+🏦 *KOPERASI JASA KARYAWAN PT. ELSEWEDY ELECTRIC INDONESIA*
 ━━━━━━━━━━━━━━━━━━━━
 *KONFIRMASI SETORAN SIMPANAN*
 
@@ -286,7 +286,7 @@ ${params.saldoBaru !== undefined ? `💳 Total Saldo : ${fRp(params.saldoBaru)}`
 Ketik *SALDO* untuk cek saldo simpanan lengkap.
 
 Terima kasih.
-_Koperasi Karyawan PT. CGPSI_
+_Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia_
 `.trim();
 
   return kirimWA(params.noHp, pesan);
