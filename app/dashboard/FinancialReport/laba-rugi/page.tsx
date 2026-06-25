@@ -43,7 +43,7 @@ export default async function LabaRugiPage({ searchParams }: any) {
     await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
 
     // 2. Proteksi ketat pengambilan URL Parameter
-    const params = searchParams || {};
+    const params = (await searchParams) || {};
     let tahun = parseInt(params.tahun);
     if (isNaN(tahun)) tahun = TAHUN_INI;
 
