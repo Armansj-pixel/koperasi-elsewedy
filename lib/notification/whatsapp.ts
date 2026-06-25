@@ -546,7 +546,7 @@ ${footer()}
 
   // ── SLIP [BULAN] [TAHUN] ──────────────────────────────────────────
   if (cmd.startsWith("SLIP")) {
-    const parts = pesan.trim().split(/\s+/);
+    const parts: string[] = pesan.trim().split(/\s+/);
     const now = new Date();
     const bulan = parts[1] ? parseInt(parts[1]) : now.getMonth() + 1;
     const tahun = parts[2] ? parseInt(parts[2]) : now.getFullYear();
