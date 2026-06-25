@@ -511,14 +511,15 @@ _Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia_
 
   // ── CMD: PINJAMAN ───────────────────────────────────────────────────
   if (cmd === "PINJAMAN" || cmd === "CEK PINJAMAN") {
-    const { data: pinjaman } = await supabase
+        const { data: pinjaman } = await supabase
       .from("pinjaman")
-      .select("nomor_kontrak, nominal_pokok, cicilan_per_bulan, tenor_bulan, status, tanggal_cair")
+      .select("id, nomor_kontrak, nominal_pokok, cicilan_per_bulan, tenor_bulan, status, tanggal_cair")
       .eq("user_id", user.id)
       .eq("status", "ACTIVE")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
 
     if (!pinjaman) {
       await kirimWA(noHp, `
