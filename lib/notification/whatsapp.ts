@@ -1,6 +1,6 @@
-"use server";
-
 // lib/notification/whatsapp.ts
+// Catatan: file ini TIDAK pakai "use server" karena berisi utility functions
+// dan fungsi async biasa — bukan Next.js Server Actions
 
 // =====================================================================
 // CONFIG
