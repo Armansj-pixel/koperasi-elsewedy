@@ -466,7 +466,7 @@ export async function handlePesanMasuk(params: {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    const pesan = `
+    const balasanSaldo = `
 ${header()}
 *INFORMASI SALDO SIMPANAN*
 
@@ -484,7 +484,7 @@ Ketik *PINJAMAN* untuk cek info pinjaman aktif.
 ${footer()}
 `.trim();
 
-    await kirimWA(noHp, pesan);
+    await kirimWA(noHp, balasanSaldo);
     return;
   }
 
@@ -521,7 +521,7 @@ ${footer()}
     const sisaKali = sisaData?.length ?? 0;
     const sisaPokok = sisaData?.reduce((s, c) => s + Number(c.nominal_cicilan), 0) ?? 0;
 
-    const pesan = `
+    const balasanPinjaman = `
 ${header()}
 *INFORMASI PINJAMAN AKTIF*
 
@@ -540,7 +540,7 @@ Ketik *SALDO* untuk cek saldo simpanan.
 ${footer()}
 `.trim();
 
-    await kirimWA(noHp, pesan);
+    await kirimWA(noHp, balasanPinjaman);
     return;
   }
 
@@ -586,7 +586,7 @@ ${footer()}
     const sukarela = Number(userDetail?.simpanan_sukarela_bulanan ?? 0);
     const totalPotongan = wajib + sukarela + cicilanBulanIni;
 
-    const pesan = `
+    const balasanSlip = `
 ${header()}
 *SLIP POTONGAN GAJI*
 Periode: ${namaBulan}
@@ -605,7 +605,7 @@ _Data per ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "lon
 ${footer()}
 `.trim();
 
-    await kirimWA(noHp, pesan);
+    await kirimWA(noHp, balasanSlip);
     return;
   }
 
