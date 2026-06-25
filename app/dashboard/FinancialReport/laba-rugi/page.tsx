@@ -5,6 +5,7 @@ import React from "react";
 import { requireRole } from "@/lib/auth/session";
 import { getLaporanLabaRugi } from "@/lib/akuntansi/laporan";
 import Link from "next/link";
+import PrintButton from "./PrintButton";
 
 // PAKSA NEXT.JS UNTUK TIDAK MELAKUKAN CACHE AGAR TIDAK CRASH (500)
 export const dynamic = "force-dynamic";
@@ -84,7 +85,7 @@ export default async function LabaRugiPage({ searchParams }: any) {
                     </select>
                     <button type="submit" style={{ background: "rgba(255,255,255,.2)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Tampilkan</button>
                   </form>
-                  <button className="btn-print" onClick={() => window.print()}>Export PDF</button>
+                 <PrintButton />
                 </div>
               </div>
             </div>
