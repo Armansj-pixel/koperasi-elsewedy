@@ -2,11 +2,13 @@ import { type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
-  // Skip middleware untuk setup & API routes tertentu
+  // Skip middleware untuk setup & API routes tertentu (TERMASUK WEBHOOK WA)
   const skipPaths = [
     "/api/setup",
     "/api/test-connection",
     "/api/sync-auth-user",
+    "/api/webhook", // <-- INI PINTU MASUK UNTUK FONNTE
+    "/api/test-wa", // <-- (Opsional) jika Anda masih pakai API tester tadi
   ];
 
   const shouldSkip = skipPaths.some((path) =>
@@ -14,7 +16,7 @@ export async function middleware(request: NextRequest) {
   );
 
   if (shouldSkip) {
-    return;
+    return; // Langsung lolos, tidak perlu cek sesi login
   }
 
   return await updateSession(request);
