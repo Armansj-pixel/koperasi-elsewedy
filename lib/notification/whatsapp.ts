@@ -1,12 +1,14 @@
 // lib/notification/whatsapp.ts
-// Catatan: file ini TIDAK pakai "use server" karena berisi utility functions
-// dan fungsi async biasa — bukan Next.js Server Actions
+// Official WhatsApp Cloud API via api.co.id
+// Tidak pakai "use server" — ini utility functions biasa
 
 // =====================================================================
-// CONFIG
+// CONFIG — api.co.id (Official WhatsApp Cloud API)
+// Env vars: APICODE_TOKEN, APICODE_PHONE_ID
 // =====================================================================
-const FONNTE_URL = "https://api.fonnte.com/send";
-const TOKEN = process.env.FONNTE_TOKEN ?? "";
+const TOKEN = process.env.APICODE_TOKEN ?? "";
+const PHONE_NUMBER_ID = process.env.APICODE_PHONE_ID ?? "";
+const APICODE_URL = `https://api.api.co.id/whatsapp/v1/${PHONE_NUMBER_ID}/messages`;
 const NAMA_KOPERASI = "Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia";
 const NAMA_KOPERASI_SHORT = "KJK PT. Elsewedy Electric Indonesia";
 
@@ -42,16 +44,17 @@ function footer(): string {
 }
 
 // =====================================================================
-// CORE: Kirim pesan WA
+// CORE: Kirim pesan via api.co.id (Official WhatsApp Cloud API)
+// Format: JSON Bearer Token — berbeda dari Fonnte (form-data)
 // =====================================================================
 async function kirimWA(
   noHp: string,
   pesan: string,
   delayMs = 0
 ): Promise<{ success: boolean; error?: string }> {
-  if (!TOKEN) {
-    console.error("[WA] FONNTE_TOKEN tidak ditemukan di .env");
-    return { success: false, error: "Token tidak dikonfigurasi" };
+  if (!TOKEN || !PHONE_NUMBER_ID) {
+    console.error("[WA] APICODE_TOKEN atau APICODE_PHONE_ID tidak ditemukan di .env");
+    return { success: false, error: "Konfigurasi API tidak lengkap" };
   }
 
   const target = normalizePhone(noHp);
@@ -60,24 +63,29 @@ async function kirimWA(
   if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
 
   try {
-    const res = await fetch(FONNTE_URL, {
+    const res = await fetch(APICODE_URL, {
       method: "POST",
       headers: {
-        Authorization: TOKEN,
-        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Bearer ${TOKEN}`,
+        "Content-Type": "application/json",
       },
-      body: new URLSearchParams({
-        target,
-        message: pesan,
-        countryCode: "62",
-      }).toString(),
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: target,
+        type: "text",
+        text: {
+          preview_url: false,
+          body: pesan,
+        },
+      }),
     });
 
     const json = await res.json();
     console.log(`[WA] Kirim ke ${target}:`, json);
 
-    if (!res.ok || json.status === false) {
-      return { success: false, error: json.reason ?? "Gagal kirim pesan" };
+    if (!res.ok || json.error) {
+      return { success: false, error: json.error?.message ?? "Gagal kirim pesan" };
     }
 
     return { success: true };
@@ -88,7 +96,7 @@ async function kirimWA(
 }
 
 // =====================================================================
-// KIRIM MASSAL dengan delay per pesan
+// KIRIM MASSAL dengan delay per pesan (cegah rate limit Meta)
 // =====================================================================
 export async function kirimWAMassal(
   targets: { noHp: string; pesan: string }[],
@@ -434,6 +442,7 @@ ${footer()}
 
 // =====================================================================
 // SELF-SERVICE: Handler pesan masuk dari anggota
+// Dipakai di: app/api/webhook/whatsapp/route.ts
 // =====================================================================
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -454,7 +463,9 @@ export async function handlePesanMasuk(params: {
   const user = users && users.length > 0 ? users[0] : null;
 
   if (!user) {
-    await kirimWA(noHp, `${header()}\nMaaf, nomor Anda tidak terdaftar sebagai anggota koperasi.\n\nHubungi Sekretaris untuk informasi lebih lanjut.\n${footer()}`);
+    await kirimWA(noHp,
+      `${header()}\nMaaf, nomor Anda tidak terdaftar sebagai anggota koperasi.\n\nHubungi Sekretaris untuk informasi lebih lanjut.\n${footer()}`
+    );
     return;
   }
 
@@ -519,7 +530,9 @@ ${footer()}
       .in("status", ["SCHEDULED", "OVERDUE"]);
 
     const sisaKali = sisaData?.length ?? 0;
-    const sisaPokok = sisaData?.reduce((s, c) => s + Number(c.nominal_cicilan), 0) ?? 0;
+    const sisaPokok = sisaData?.reduce(
+      (s: number, c: { nominal_cicilan: number }) => s + Number(c.nominal_cicilan), 0
+    ) ?? 0;
 
     const balasanPinjaman = `
 ${header()}
@@ -559,7 +572,7 @@ ${footer()}
       .eq("user_id", user.id).maybeSingle();
 
     const { data: pinjaman } = await supabase
-      .from("pinjaman").select("id, nomor_kontrak, cicilan_per_bulan")
+      .from("pinjaman").select("id, cicilan_per_bulan")
       .eq("user_id", user.id).eq("status", "ACTIVE").maybeSingle();
 
     const [year, month] = periode.split("-").map(Number);
