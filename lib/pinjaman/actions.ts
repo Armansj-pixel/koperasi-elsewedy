@@ -6,6 +6,12 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { buatJurnalUmum, generateNomorBukti } from '@/lib/akuntansi/actions'
+import {
+  notifPencairanPinjaman,
+  notifStatusPinjaman,
+  notifAngsuranManual,
+  notifPinjamanLunas,
+} from '@/lib/notification/whatsapp'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type PinjamanStatus =
@@ -81,13 +87,11 @@ export interface PinjamanWithUser extends Partial<Pinjaman> {
  * - Cicilan per bulan = Pokok / Tenor (murni pokok, TANPA bunga/margin bulanan)
  * - Pendapatan koperasi = Biaya Admin 4% flat, dipotong di awal pencairan
  * - Pokok hutang = Plafon penuh (bukan plafon dikurangi admin)
- * Jika di masa depan ada produk Murabahah, buat fungsi hitungPinjaman terpisah
- * dengan komponen margin dan akun kredit 402/403.
  */
 export async function hitungPinjaman(nominal: number, tenor: number) {
   const biayaAdmin = Math.round(nominal * 0.04)
-  const totalDiterima = nominal - biayaAdmin      // Kas bersih ke anggota (sebelum potong pinjaman lama)
-  const cicilanPerBulan = Math.round(nominal / tenor) // Pokok murni, tanpa margin
+  const totalDiterima = nominal - biayaAdmin
+  const cicilanPerBulan = Math.round(nominal / tenor)
   return { biayaAdmin, totalDiterima, cicilanPerBulan }
 }
 
@@ -126,6 +130,13 @@ function generateJadwalCicilan(
     })
   }
   return cicilan
+}
+
+// ─── HELPER: Ambil no_hp user ─────────────────────────────────────────────────
+async function getUserNoHp(supabase: any, userId: string): Promise<{ nama: string; no_hp: string } | null> {
+  const { data } = await supabase
+    .from('users').select('nama, no_hp').eq('id', userId).single()
+  return data ?? null
 }
 
 // ─── GET: List Pinjaman ───────────────────────────────────────────────────────
@@ -389,34 +400,29 @@ export async function approvePinjaman(formData: FormData) {
   revalidatePath('/dashboard/pinjaman')
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
 
+  // ── NOTIFIKASI WA ─────────────────────────────────────────────────
+  // Fire-and-forget: tidak block redirect meski WA gagal
+  const userInfo = await getUserNoHp(supabase, pinjaman.user_id)
+  if (userInfo?.no_hp) {
+    const statusWA = action === 'reject'
+      ? 'REJECTED'
+      : ({ PENDING_L1: 'PENDING_L2', PENDING_L2: 'PENDING_L3', PENDING_L3: 'APPROVED' } as Record<string, any>)[pinjaman.status]
+
+    notifStatusPinjaman({
+      noHp: userInfo.no_hp,
+      nama: userInfo.nama,
+      nomorKontrak: pinjaman.nomor_kontrak,
+      status: statusWA,
+      catatan: catatan.trim() || undefined,
+    }).catch(console.error)
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   const msg = action === 'approve' ? 'Pinjaman berhasil disetujui' : 'Pinjaman berhasil ditolak'
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent(msg)}`)
 }
 
-// ─── ACTION: Cairkan Pinjaman + JURNAL AKUNTANSI ──────────────────────────────
-/**
- * LOGIKA JURNAL PENCAIRAN (SAK ETAP):
- *
- * KASUS A — Pinjaman Baru (non Top-Up):
- *   Dr 111 Piutang Anggota       = nominal_pokok
- *     Kr 401 Pendapatan Admin    = biaya_admin (4%)
- *     Kr 102-MND Bank Mandiri    = nominal_pokok - biaya_admin  ← kas bersih keluar
- *   Balance: D = K ✅
- *
- * KASUS B — Top-Up (ada pelunasan pinjaman lama):
- *   JURNAL 1 (JVSETTLE) — Pelunasan kontrak lama:
- *     Dr 102-MND Bank            = sisa_pinjaman_lama  ← virtual: uang "masuk" dulu
- *     Kr 111 Piutang             = sisa_pinjaman_lama  ← piutang lama terhapus
- *   Balance ✅
- *
- *   JURNAL 2 (CAIR) — Pencairan kontrak baru:
- *     Dr 111 Piutang Baru        = nominal_pokok (plafon penuh)
- *     Kr 401 Pendapatan Admin    = biaya_admin
- *     Kr 102-MND Bank            = nominal_pokok - biaya_admin  ← total bruto keluar
- *   Balance: D = K ✅
- *
- *   Net posisi bank: (nominal_pokok - biaya_admin) - sisa_lama = nominal_diterima (kas nyata ke anggota) ✅
- */
+// ─── ACTION: Cairkan Pinjaman + JURNAL + NOTIFIKASI ───────────────────────────
 export async function cairkanPinjaman(formData: FormData) {
   const session = await requireRole(['BENDAHARA'])
 
@@ -465,7 +471,6 @@ export async function cairkanPinjaman(formData: FormData) {
       tanggal_lunas: tanggalFinalStr, updated_at: new Date().toISOString(),
     }).eq('id', oldLoanId)
 
-    // JURNAL 1: Pelunasan kontrak lama (balance sendiri)
     await buatJurnalUmum({
       prefix_bukti: 'JVSETTLE',
       tanggal_transaksi: tanggalFinalStr,
@@ -479,11 +484,8 @@ export async function cairkanPinjaman(formData: FormData) {
     })
   }
 
-  // 4. JURNAL 2 (CAIR): Pencairan kontrak baru (balance sendiri selalu)
-  // Kredit 102-MND = nominal_pokok - biaya_admin (bruto, sebelum potong pinjaman lama)
-  // Net cash flow ke anggota = bruto - sisaLama = nominal_diterima ← tercermin di net 2 jurnal
+  // 4. JURNAL 2 (CAIR)
   const kreditBank = pinjaman.nominal_pokok - pinjaman.biaya_admin
-
   await buatJurnalUmum({
     prefix_bukti: 'CAIR',
     tanggal_transaksi: tanggalFinalStr,
@@ -497,12 +499,29 @@ export async function cairkanPinjaman(formData: FormData) {
     ],
   })
 
+  // ── NOTIFIKASI WA ─────────────────────────────────────────────────
+  const userInfo = await getUserNoHp(supabase, pinjaman.user_id)
+  if (userInfo?.no_hp) {
+    notifPencairanPinjaman({
+      noHp: userInfo.no_hp,
+      nama: userInfo.nama,
+      nomorKontrak: pinjaman.nomor_kontrak,
+      nominalPokok: pinjaman.nominal_pokok,
+      nominalDiterima: pinjaman.nominal_diterima,
+      biayaAdmin: pinjaman.biaya_admin,
+      cicilanPerBulan: pinjaman.cicilan_per_bulan,
+      tenorBulan: pinjaman.tenor_bulan,
+      tanggalCair: tanggalFinalStr,
+    }).catch(console.error)
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   revalidatePath('/dashboard/pinjaman')
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pencairan berhasil! Jurnal Akuntansi otomatis tercatat.')}`)
 }
 
-// ─── ACTION: Bayar Cicilan Manual + JURNAL ────────────────────────────────────
+// ─── ACTION: Bayar Cicilan Manual + JURNAL + NOTIFIKASI ──────────────────────
 export async function bayarCicilan(formData: FormData) {
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
 
@@ -548,6 +567,32 @@ export async function bayarCicilan(formData: FormData) {
         { kode_akun: '111', debit: 0, kredit: nominalBayar, user_id: pinjamanUpdated.user_id },
       ],
     })
+
+    // ── NOTIFIKASI WA ───────────────────────────────────────────────
+    const userInfo = await getUserNoHp(supabase, pinjamanUpdated.user_id)
+    if (userInfo?.no_hp) {
+      if (semuaLunas) {
+        // Kirim notif lunas
+        notifPinjamanLunas({
+          noHp: userInfo.no_hp,
+          nama: userInfo.nama,
+          nomorKontrak: pinjamanUpdated.nomor_kontrak,
+          tanggalLunas: tanggalBayar,
+        }).catch(console.error)
+      } else {
+        // Kirim notif angsuran biasa
+        notifAngsuranManual({
+          noHp: userInfo.no_hp,
+          nama: userInfo.nama,
+          nomorKontrak: pinjamanUpdated.nomor_kontrak,
+          nominalBayar,
+          tanggalBayar,
+          sisaCicilan: sisaKali,
+          sisaPokok,
+        }).catch(console.error)
+      }
+    }
+    // ───────────────────────────────────────────────────────────────
   }
 
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
@@ -555,7 +600,7 @@ export async function bayarCicilan(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pembayaran berhasil & Jurnal tercatat.')}`)
 }
 
-// ─── ACTION: Pelunasan Sekaligus + JURNAL ─────────────────────────────────────
+// ─── ACTION: Pelunasan Sekaligus + JURNAL + NOTIFIKASI ───────────────────────
 export async function pelunasanPinjamanSekaligus(formData: FormData) {
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
 
@@ -599,21 +644,24 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
     })
   }
 
+  // ── NOTIFIKASI WA ─────────────────────────────────────────────────
+  const userInfo = await getUserNoHp(supabase, pinjaman.user_id)
+  if (userInfo?.no_hp) {
+    notifPinjamanLunas({
+      noHp: userInfo.no_hp,
+      nama: userInfo.nama,
+      nomorKontrak: pinjaman.nomor_kontrak,
+      tanggalLunas: tanggalPelunasan,
+    }).catch(console.error)
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
   revalidatePath('/dashboard/pinjaman')
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan berhasil diproses & Jurnal tercatat.')}`)
 }
 
 // ─── ACTION: Input Pinjaman Existing (Migrasi) + JURNAL PEMBUKA ───────────────
-/**
- * LOGIKA MIGRASI (Anti Double-Journalling):
- * Uang sudah keluar di 2025 (sebelum sistem ada). Kita TIDAK me-replay transaksi historis.
- * Yang dicatat hanya SALDO OUTSTANDING per tanggal cut-off migrasi:
- *   Dr 111 Piutang Anggota   = sisa_pokok_outstanding
- *   Kr 399 Modal Awal Migrasi = sisa_pokok_outstanding  ← bukan pendapatan, bukan kas
- * Ketika cicilan masuk di 2026, jurnalnya normal (Dr Bank / Kr Piutang).
- * Pinjaman yang sudah LUNAS saat diinput → tidak perlu jurnal apapun.
- */
 const PinjamanExistingSchema = z.object({
   user_id: z.string().uuid('User ID tidak valid'),
   nominal: z.number().min(1),
@@ -647,7 +695,7 @@ export async function inputPinjamanExisting(formData: FormData) {
 
   const { biayaAdmin, totalDiterima, cicilanPerBulan } = await hitungPinjaman(nominal, tenor)
   const sisaKaliTersisa = Math.max(0, tenor - cicilan_terbayar)
-  const outstandingSisa = sisaKaliTersisa * cicilanPerBulan  // Sisa cicilan × nominal per cicilan
+  const outstandingSisa = sisaKaliTersisa * cicilanPerBulan
 
   const nomorKontrak = await generateNomorBukti('MIG', tanggal_pencairan)
   const supabase = await createClient()
@@ -686,7 +734,6 @@ export async function inputPinjamanExisting(formData: FormData) {
   }))
   await supabase.from('cicilan_pinjaman').insert(jadwalWithStatus)
 
-  // Jurnal pembuka HANYA jika masih ada sisa outstanding dan belum lunas
   if (outstandingSisa > 0 && cicilan_terbayar < tenor) {
     await buatJurnalUmum({
       nomor_bukti: `OP-${nomorKontrak}`,
@@ -742,7 +789,6 @@ export async function potongCicilanMassal(bulan: number, tahun: number) {
   const tanggalJurnal = new Date().toISOString().split('T')[0]
   const nomorBuktiPayroll = `PRPINJ-${tahun}${String(bulan).padStart(2, '0')}`
 
-  // Idempotency: cegah eksekusi ganda periode yang sama
   const { data: existJurnal } = await supabase
     .from('jurnal_induk').select('id').eq('nomor_bukti', nomorBuktiPayroll).maybeSingle()
   if (existJurnal) {
@@ -765,7 +811,6 @@ export async function potongCicilanMassal(bulan: number, tahun: number) {
     .update({ status: 'PAID', tanggal_pembayaran: tanggalJurnal })
     .in('id', cicilanIds)
 
-  // Auto-heal sisa pokok & status per pinjaman
   const pinjamanIds = [...new Set(cicilanTertarget.map((c) => c.pinjaman_id))]
   for (const pId of pinjamanIds) {
     const { data: sisa } = await supabase
