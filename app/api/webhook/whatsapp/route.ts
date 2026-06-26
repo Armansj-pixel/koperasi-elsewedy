@@ -9,7 +9,6 @@ export async function POST(req: NextRequest) {
     try { jsonBody = JSON.parse(rawBody); } catch { jsonBody = {}; }
 
     // ── Verifikasi Signature dari api.co.id ──────────────────────────
-    // Secret dikirim di header x-webhook-signature
     const signature = req.headers.get("x-webhook-signature") ?? "";
     const expectedSecret = process.env.APICODE_WEBHOOK_SECRET ?? "";
 
@@ -18,43 +17,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, reason: "Unauthorized" }, { status: 401 });
     }
 
-    // ── Skip event non-pesan (test, status update, dll) ──────────────
-    const eventType = jsonBody.event_type ?? jsonBody.type ?? "";
+    // ── Skip event non-pesan ─────────────────────────────────────────
+    const eventType = jsonBody.event_type ?? "";
 
     if (eventType === "test") {
-      console.log("[Webhook WA] Test event diterima — OK");
       return NextResponse.json({ ok: true, note: "Test event received" });
     }
 
     // ── Ekstrak sender & message ──────────────────────────────────────
-    // Format pesan masuk WA via api.co.id (Official Cloud API)
-    // Struktur mengikuti Meta WhatsApp Cloud API webhook format
-    const sender =
-      jsonBody.sender ??
-      jsonBody.from ??
-      jsonBody?.data?.from ??
-      jsonBody?.data?.sender ??
-      jsonBody?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from ??
-      jsonBody?.messages?.[0]?.from ??
-      "";
+    // Format dikonfirmasi dari log:
+    // data.customer_phone = nomor pengirim
+    // data.content        = isi pesan
+    // data.direction      = "inbound" / "outbound"
+    // data.message_type   = "text" / "image" / dll
+    const sender      = jsonBody?.data?.customer_phone ?? jsonBody?.data?.raw?.from ?? "";
+    const message     = jsonBody?.data?.content        ?? jsonBody?.data?.raw?.text?.body ?? "";
+    const direction   = jsonBody?.data?.direction      ?? "";
+    const messageType = jsonBody?.data?.message_type   ?? "";
 
-    const message =
-      jsonBody.message ??
-      jsonBody.text ??
-      jsonBody?.data?.message ??
-      jsonBody?.data?.text ??
-      jsonBody?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body ??
-      jsonBody?.messages?.[0]?.text?.body ??
-      jsonBody?.messages?.[0]?.text ??
-      "";
-
-    console.log("[Webhook WA] Event:", eventType, "| Sender:", sender, "| Message:", message);
-
-    if (!sender || !message) {
-      console.log("[Webhook WA] Bukan pesan teks — dilewati:", JSON.stringify(jsonBody));
-      return NextResponse.json({ ok: true, note: "Non-message event skipped" });
+    // Hanya proses pesan teks masuk dari anggota
+    if (direction === "outbound") {
+      return NextResponse.json({ ok: true, note: "Outbound skipped" });
     }
 
+    if (messageType !== "text") {
+      console.log("[Webhook WA] Non-text dilewati:", messageType);
+      return NextResponse.json({ ok: true, note: "Non-text skipped" });
+    }
+
+    if (!sender || !message) {
+      console.log("[Webhook WA] Sender/message kosong:", { sender, message });
+      return NextResponse.json({ ok: true, note: "Empty message skipped" });
+    }
+
+    console.log("[Webhook WA] Proses pesan dari:", sender, "→", message);
     await handlePesanMasuk({ noHp: sender, pesan: message });
 
     return NextResponse.json({ ok: true });
