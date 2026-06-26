@@ -11,6 +11,7 @@ import {
   notifStatusPinjaman,
   notifAngsuranManual,
   notifPinjamanLunas,
+  notifPengajuanDiterima,
 } from '@/lib/notification/whatsapp'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -339,6 +340,21 @@ export async function ajukanPinjaman(formData: FormData) {
   }
 
   revalidatePath('/dashboard/pinjaman')
+
+  // ── NOTIFIKASI WA — Pengajuan Diterima ───────────────────────────
+  const userNotif = await getUserNoHp(supabase, targetUserId)
+  if (userNotif?.no_hp) {
+    notifPengajuanDiterima({
+      noHp: userNotif.no_hp,
+      nama: userNotif.nama,
+      nomorKontrak: pinjaman.nomor_kontrak,
+      nominal,
+      tenor,
+      cicilanPerBulan,
+    }).catch(console.error)
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   const viewParam = !canOverride ? '?view=personal&' : '?'
   redirect(`/dashboard/pinjaman/${pinjaman.id}${viewParam}success=${encodeURIComponent('Pengajuan berhasil dikirim')}`)
 }
