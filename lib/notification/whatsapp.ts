@@ -9,7 +9,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 // =====================================================================
 const BASE_URL = "https://chat.api.co.id/api/v1/public";
 const TOKEN = process.env.APICODE_TOKEN ?? "";
-const PHONE_NUMBER_ID = process.env.APICODE_PHONE_ID ?? ""; // id dari GET /phone-numbers
+const PHONE_NUMBER_ID = process.env.APICODE_PHONE_ID ?? ""; // Opsional — kosongkan jika hanya 1 nomor
 const NAMA_KOPERASI = "Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia";
 const NAMA_KOPERASI_SHORT = "KJK PT. Elsewedy Electric Indonesia";
 
@@ -437,6 +437,41 @@ Selamat! Pinjaman Anda telah dinyatakan *LUNAS*.
 📅 Tanggal Lunas : ${fTgl(params.tanggalLunas)}
 
 Terima kasih atas kepercayaan dan ketepatan waktu pembayaran Anda selama ini. Anda dapat mengajukan pinjaman baru kapan saja sesuai kebutuhan.
+
+${footer()}
+`.trim();
+
+  return kirimWA(params.noHp, pesan);
+}
+
+// ── 11. PENGAJUAN PINJAMAN DITERIMA ──────────────────────────────────
+export async function notifPengajuanDiterima(params: {
+  noHp: string;
+  nama: string;
+  nomorKontrak: string;
+  nominal: number;
+  tenor: number;
+  cicilanPerBulan: number;
+}) {
+  const pesan = `
+${header()}
+*PENGAJUAN PINJAMAN DITERIMA* ✅
+
+Yth. Bapak/Ibu *${params.nama}*,
+
+Pengajuan pinjaman Anda telah kami terima dan sedang dalam proses persetujuan.
+
+📋 No. Kontrak  : ${params.nomorKontrak}
+💰 Nominal      : ${fRp(params.nominal)}
+📆 Tenor        : ${params.tenor} bulan
+💳 Est. Cicilan : ${fRp(params.cicilanPerBulan)}/bulan
+
+Proses persetujuan memerlukan 3 tahap:
+1️⃣ Sekretaris
+2️⃣ Bendahara
+3️⃣ Ketua
+
+Anda akan mendapat notifikasi di setiap tahap persetujuan.
 
 ${footer()}
 `.trim();
