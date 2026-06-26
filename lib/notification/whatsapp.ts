@@ -1,14 +1,15 @@
 // lib/notification/whatsapp.ts
-// Official WhatsApp Cloud API via api.co.id
-// Tidak pakai "use server" — ini utility functions biasa
+// Official WhatsApp via api.co.id
+// Base URL: https://chat.api.co.id/api/v1/public
+
+import { createServiceClient } from "@/lib/supabase/server";
 
 // =====================================================================
-// CONFIG — api.co.id (Official WhatsApp Cloud API)
-// Env vars: APICODE_TOKEN, APICODE_PHONE_ID
+// CONFIG
 // =====================================================================
+const BASE_URL = "https://chat.api.co.id/api/v1/public";
 const TOKEN = process.env.APICODE_TOKEN ?? "";
-const PHONE_NUMBER_ID = process.env.APICODE_PHONE_ID ?? "";
-const APICODE_URL = `https://api.api.co.id/whatsapp/v1/${PHONE_NUMBER_ID}/messages`;
+const PHONE_NUMBER_ID = process.env.APICODE_PHONE_ID ?? ""; // id dari GET /phone-numbers
 const NAMA_KOPERASI = "Koperasi Jasa Karyawan PT. Elsewedy Electric Indonesia";
 const NAMA_KOPERASI_SHORT = "KJK PT. Elsewedy Electric Indonesia";
 
@@ -44,17 +45,17 @@ function footer(): string {
 }
 
 // =====================================================================
-// CORE: Kirim pesan via api.co.id (Official WhatsApp Cloud API)
-// Format: JSON Bearer Token — berbeda dari Fonnte (form-data)
+// CORE: Kirim pesan via api.co.id
+// Endpoint: POST /api/v1/public/messages/send
 // =====================================================================
 async function kirimWA(
   noHp: string,
   pesan: string,
   delayMs = 0
 ): Promise<{ success: boolean; error?: string }> {
-  if (!TOKEN || !PHONE_NUMBER_ID) {
-    console.error("[WA] APICODE_TOKEN atau APICODE_PHONE_ID tidak ditemukan di .env");
-    return { success: false, error: "Konfigurasi API tidak lengkap" };
+  if (!TOKEN) {
+    console.error("[WA] APICODE_TOKEN tidak ditemukan di .env");
+    return { success: false, error: "Token tidak dikonfigurasi" };
   }
 
   const target = normalizePhone(noHp);
@@ -63,28 +64,31 @@ async function kirimWA(
   if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
 
   try {
-    const res = await fetch(APICODE_URL, {
+    const body: Record<string, any> = {
+      phone_number: target,
+      channel: "whatsapp",
+      message_type: "text",
+      content: pesan,
+    };
+
+    // Sertakan phone_number_id jika tersedia
+    if (PHONE_NUMBER_ID) {
+      body.whatsapp_phone_number_id = PHONE_NUMBER_ID;
+    }
+
+    const res = await fetch(`${BASE_URL}/messages/send`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: target,
-        type: "text",
-        text: {
-          preview_url: false,
-          body: pesan,
-        },
-      }),
+      body: JSON.stringify(body),
     });
 
     const json = await res.json();
     console.log(`[WA] Kirim ke ${target}:`, json);
 
-    if (!res.ok || json.error) {
+    if (!res.ok || json.success === false) {
       return { success: false, error: json.error?.message ?? "Gagal kirim pesan" };
     }
 
@@ -96,7 +100,7 @@ async function kirimWA(
 }
 
 // =====================================================================
-// KIRIM MASSAL dengan delay per pesan (cegah rate limit Meta)
+// KIRIM MASSAL dengan delay per pesan
 // =====================================================================
 export async function kirimWAMassal(
   targets: { noHp: string; pesan: string }[],
@@ -190,7 +194,7 @@ ${footer()}
   return kirimWA(params.noHp, pesan);
 }
 
-// ── 3. TEMPLATE PAYROLL ANGSURAN (untuk kirim massal) ────────────────
+// ── 3. TEMPLATE PAYROLL ANGSURAN ─────────────────────────────────────
 export function templatePayrollAngsuran(params: {
   nama: string;
   nomorKontrak: string;
@@ -225,7 +229,7 @@ ${footer()}
 `.trim();
 }
 
-// ── 4. TEMPLATE PAYROLL SIMPANAN (untuk kirim massal) ─────────────────
+// ── 4. TEMPLATE PAYROLL SIMPANAN ─────────────────────────────────────
 export function templatePayrollSimpanan(params: {
   nama: string;
   periode: string;
@@ -442,10 +446,7 @@ ${footer()}
 
 // =====================================================================
 // SELF-SERVICE: Handler pesan masuk dari anggota
-// Dipakai di: app/api/webhook/whatsapp/route.ts
 // =====================================================================
-import { createServiceClient } from "@/lib/supabase/server";
-
 export async function handlePesanMasuk(params: {
   noHp: string;
   pesan: string;
