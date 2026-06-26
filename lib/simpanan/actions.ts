@@ -5,11 +5,16 @@ import { requireRole } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { buatJurnalUmum } from "@/lib/akuntansi/actions";
+import {
+  notifSetoranManual,
+  notifPenarikanDiajukan,
+  notifPenarikanDisetujui,
+  notifPenarikanDitolak,
+} from "@/lib/notification/whatsapp";
 
 // =====================================================================
 // SCHEMAS
 // =====================================================================
-
 const SetoranSchema = z.object({
   user_id: z.string().uuid("User tidak valid"),
   nominal: z.coerce.number().min(1000, "Minimal setoran Rp 1.000"),
@@ -51,7 +56,7 @@ async function updateSaldo(
   if (jenisTransaksi === "SIMPANAN_POKOK") pokok += nominalMutasi;
   else if (jenisTransaksi === "SIMPANAN_WAJIB") wajib += nominalMutasi;
   else if (jenisTransaksi === "SIMPANAN_SUKARELA") sukarela += nominalMutasi;
-  else if (jenisTransaksi === "PENARIKAN") sukarela -= nominalMutasi; // Hanya dari keranjang sukarela
+  else if (jenisTransaksi === "PENARIKAN") sukarela -= nominalMutasi;
 
   const total = pokok + wajib + sukarela;
 
@@ -147,8 +152,7 @@ export async function getRiwayatSimpanan(userId: string, limit = 20) {
 }
 
 // =====================================================================
-// ACTION: Input Setoran Manual + JURNAL AKUNTANSI
-// Perbaikan: sumber_dana dinamis (tidak lagi hard-code 102-MND)
+// ACTION: Input Setoran Manual + JURNAL + NOTIFIKASI WA
 // =====================================================================
 export async function inputSetoran(formData: FormData) {
   const currentUser = await requireRole(["SUPERADMIN", "BENDAHARA"]);
@@ -177,7 +181,7 @@ export async function inputSetoran(formData: FormData) {
   };
 
   const { data: user } = await supabase
-    .from("users").select("id, nama, nik").eq("id", data.user_id).single();
+    .from("users").select("id, nama, nik, no_hp").eq("id", data.user_id).single();
   if (!user) return { success: false, error: "Anggota tidak ditemukan" };
 
   // 1. Insert riwayat simpanan
@@ -203,10 +207,6 @@ export async function inputSetoran(formData: FormData) {
   if (saldoError) return { success: false, error: saldoError.message };
 
   // 3. Jurnal akuntansi
-  // Akun kredit sesuai jenis simpanan:
-  //   SIMPANAN_POKOK   → 302 (Ekuitas - Simpanan Pokok)
-  //   SIMPANAN_WAJIB   → 303 (Ekuitas - Simpanan Wajib)
-  //   SIMPANAN_SUKARELA → 201 (Kewajiban - Simpanan Sukarela, bisa ditarik sewaktu-waktu)
   const akunKredit =
     data.jenis_simpanan === "SIMPANAN_POKOK" ? "302" :
     data.jenis_simpanan === "SIMPANAN_WAJIB" ? "303" : "201";
@@ -218,10 +218,27 @@ export async function inputSetoran(formData: FormData) {
     jenis_sumber: "SIMPANAN_MANUAL",
     id_sumber: insertedRiwayat?.id?.toString() || "",
     lines: [
-      { kode_akun: data.sumber_dana, debit: data.nominal, kredit: 0, user_id: data.user_id }, // Kas/Bank sesuai pilihan
+      { kode_akun: data.sumber_dana, debit: data.nominal, kredit: 0, user_id: data.user_id },
       { kode_akun: akunKredit, debit: 0, kredit: data.nominal, user_id: data.user_id },
     ],
   });
+
+  // 4. Ambil saldo terbaru untuk notif
+  const { data: saldoBaru } = await supabase
+    .from("saldo_simpanan").select("total_saldo").eq("user_id", data.user_id).single();
+
+  // ── NOTIFIKASI WA ─────────────────────────────────────────────────
+  if (user.no_hp) {
+    notifSetoranManual({
+      noHp: user.no_hp,
+      nama: user.nama,
+      jenisSimpanan: data.jenis_simpanan,
+      nominal: data.nominal,
+      tanggal: tanggalFinal,
+      saldoBaru: Number(saldoBaru?.total_saldo ?? 0),
+    }).catch(console.error)
+  }
+  // ─────────────────────────────────────────────────────────────────
 
   revalidatePath("/dashboard/simpanan");
   revalidatePath(`/dashboard/simpanan/${data.user_id}`);
@@ -235,7 +252,8 @@ export async function inputSetoran(formData: FormData) {
 
 // =====================================================================
 // ACTION: Setoran Bulanan Massal (Payroll) + JURNAL
-// Perbaikan: idempotency jurnal via nomor_bukti fixed per periode
+// Catatan: notif payroll massal dikirim terpisah via kirimWAMassal
+// di halaman payroll setelah proses selesai
 // =====================================================================
 export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
   const currentUser = await requireRole(["SUPERADMIN", "BENDAHARA"]);
@@ -246,7 +264,6 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
   const namaBulan = new Date(tahun, bulan - 1).toLocaleString("id-ID", { month: "long", year: "numeric" });
   const nomorBuktiPayroll = `PRSIMP-${tahun}${String(bulan).padStart(2, "0")}`;
 
-  // Idempotency: cegah eksekusi ganda periode yang sama
   const { data: existJurnal } = await supabase
     .from("jurnal_induk").select("id").eq("nomor_bukti", nomorBuktiPayroll).maybeSingle();
   if (existJurnal) {
@@ -272,7 +289,6 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
     const sukarela = Number(anggota.simpanan_sukarela_bulanan || 0);
     if (wajib === 0 && sukarela === 0) continue;
 
-    // Proses Simpanan Wajib
     if (wajib > 0) {
       const { data: existWajib } = await supabase
         .from("simpanan").select("id")
@@ -298,7 +314,6 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
       }
     }
 
-    // Proses Simpanan Sukarela
     if (sukarela > 0) {
       const { data: existSukarela } = await supabase
         .from("simpanan").select("id")
@@ -323,7 +338,6 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
     }
   }
 
-  // Jurnal massal satu entri per periode (idempotent via nomor_bukti fixed)
   const totalPayrollSimpanan = totalWajibTerkumpul + totalSukarelaTerkumpul;
 
   if (totalPayrollSimpanan > 0) {
@@ -355,7 +369,7 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
 }
 
 // =====================================================================
-// ACTION: Pengajuan Penarikan
+// ACTION: Pengajuan Penarikan + NOTIFIKASI WA
 // =====================================================================
 export async function ajukanPenarikan(formData: FormData) {
   const currentUser = await requireRole(["ANGGOTA", "SEKRETARIS", "BENDAHARA", "KETUA", "SUPERADMIN"]);
@@ -394,6 +408,20 @@ export async function ajukanPenarikan(formData: FormData) {
   });
 
   if (error) return { success: false, error: error.message };
+
+  // ── NOTIFIKASI WA ─────────────────────────────────────────────────
+  // Ambil no_hp anggota yang mengajukan
+  const { data: userInfo } = await supabase
+    .from("users").select("nama, no_hp").eq("id", currentUser.id).single();
+  if (userInfo?.no_hp) {
+    notifPenarikanDiajukan({
+      noHp: userInfo.no_hp,
+      nama: userInfo.nama,
+      nominal: parsed.data.nominal,
+    }).catch(console.error)
+  }
+  // ─────────────────────────────────────────────────────────────────
+
   revalidatePath("/dashboard/simpanan");
   return {
     success: true,
@@ -402,8 +430,7 @@ export async function ajukanPenarikan(formData: FormData) {
 }
 
 // =====================================================================
-// ACTION: Approve / Reject Penarikan + JURNAL AKUNTANSI
-// Perbaikan: nomor bukti sequential via prefix_bukti
+// ACTION: Approve / Reject Penarikan + JURNAL + NOTIFIKASI WA
 // =====================================================================
 export async function updateStatusPenarikan(
   penarikanId: string,
@@ -431,6 +458,10 @@ export async function updateStatusPenarikan(
     .from("penarikan_simpanan").update(updateData).eq("id", penarikanId);
   if (updateError) return { success: false, error: updateError.message };
 
+  // Ambil info user untuk notif
+  const { data: userInfo } = await supabase
+    .from("users").select("nama, no_hp").eq("id", penarikan.user_id).single();
+
   if (status === "APPROVED") {
     const tanggalHariIni = new Date().toISOString().split("T")[0];
 
@@ -440,7 +471,7 @@ export async function updateStatusPenarikan(
     );
     if (saldoError) return { success: false, error: "Gagal mengurangi saldo sukarela." };
 
-    // 2. Catat riwayat ke tabel simpanan
+    // 2. Catat riwayat
     await supabase.from("simpanan").insert({
       user_id: penarikan.user_id,
       jenis: "PENARIKAN",
@@ -453,7 +484,7 @@ export async function updateStatusPenarikan(
       referensi_id: penarikanId,
     });
 
-    // 3. Jurnal akuntansi — nomor bukti sequential via prefix
+    // 3. Jurnal
     await buatJurnalUmum({
       prefix_bukti: "WD",
       tanggal_transaksi: tanggalHariIni,
@@ -461,10 +492,38 @@ export async function updateStatusPenarikan(
       jenis_sumber: "MANUAL",
       id_sumber: penarikanId,
       lines: [
-        { kode_akun: "201", debit: Number(penarikan.nominal), kredit: 0, user_id: penarikan.user_id }, // Kewajiban berkurang
-        { kode_akun: "102-MND", debit: 0, kredit: Number(penarikan.nominal), user_id: penarikan.user_id }, // Kas keluar
+        { kode_akun: "201", debit: Number(penarikan.nominal), kredit: 0, user_id: penarikan.user_id },
+        { kode_akun: "102-MND", debit: 0, kredit: Number(penarikan.nominal), user_id: penarikan.user_id },
       ],
     });
+
+    // Ambil saldo sisa setelah penarikan
+    const { data: saldoSisa } = await supabase
+      .from("saldo_simpanan").select("saldo_sukarela").eq("user_id", penarikan.user_id).single();
+
+    // ── NOTIFIKASI WA — Disetujui ──────────────────────────────────
+    if (userInfo?.no_hp) {
+      notifPenarikanDisetujui({
+        noHp: userInfo.no_hp,
+        nama: userInfo.nama,
+        nominal: Number(penarikan.nominal),
+        tanggal: tanggalHariIni,
+        saldoSisa: Number(saldoSisa?.saldo_sukarela ?? 0),
+      }).catch(console.error)
+    }
+    // ───────────────────────────────────────────────────────────────
+
+  } else {
+    // ── NOTIFIKASI WA — Ditolak ────────────────────────────────────
+    if (userInfo?.no_hp) {
+      notifPenarikanDitolak({
+        noHp: userInfo.no_hp,
+        nama: userInfo.nama,
+        nominal: Number(penarikan.nominal),
+        alasan: catatan || "Ditolak oleh Bendahara",
+      }).catch(console.error)
+    }
+    // ───────────────────────────────────────────────────────────────
   }
 
   revalidatePath("/dashboard/simpanan");
