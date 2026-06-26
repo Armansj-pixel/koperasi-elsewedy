@@ -4,40 +4,36 @@ import { handlePesanMasuk } from "@/lib/notification/whatsapp";
 
 export async function POST(req: NextRequest) {
   try {
-    // Log semua headers untuk debug
-    const headersObj: Record<string, string> = {};
-    req.headers.forEach((value, key) => { headersObj[key] = value; });
-    console.log("[Webhook WA] Headers:", JSON.stringify(headersObj));
-
-    // Log raw body untuk debug format payload api.co.id
     const rawBody = await req.text();
-    console.log("[Webhook WA] Raw Body:", rawBody);
-
-    // Parse body
     let jsonBody: any = {};
     try { jsonBody = JSON.parse(rawBody); } catch { jsonBody = {}; }
 
-    // Log struktur lengkap
-    console.log("[Webhook WA] Parsed:", JSON.stringify(jsonBody, null, 2));
-
-    // Verifikasi secret
-    const secret = headersObj["x-webhook-secret"]
-                ?? headersObj["x-hub-signature-256"]
-                ?? headersObj["authorization"]
-                ?? "";
+    // ── Verifikasi Signature dari api.co.id ──────────────────────────
+    // Secret dikirim di header x-webhook-signature
+    const signature = req.headers.get("x-webhook-signature") ?? "";
     const expectedSecret = process.env.APICODE_WEBHOOK_SECRET ?? "";
 
-    if (expectedSecret && !secret.includes(expectedSecret)) {
-      console.warn("[Webhook WA] Unauthorized");
+    if (expectedSecret && signature !== expectedSecret) {
+      console.warn("[Webhook WA] Unauthorized — signature tidak cocok");
       return NextResponse.json({ ok: false, reason: "Unauthorized" }, { status: 401 });
     }
 
-    // Coba berbagai kemungkinan field nama sender & message
-    // dari berbagai format payload WhatsApp Cloud API
+    // ── Skip event non-pesan (test, status update, dll) ──────────────
+    const eventType = jsonBody.event_type ?? jsonBody.type ?? "";
+
+    if (eventType === "test") {
+      console.log("[Webhook WA] Test event diterima — OK");
+      return NextResponse.json({ ok: true, note: "Test event received" });
+    }
+
+    // ── Ekstrak sender & message ──────────────────────────────────────
+    // Format pesan masuk WA via api.co.id (Official Cloud API)
+    // Struktur mengikuti Meta WhatsApp Cloud API webhook format
     const sender =
       jsonBody.sender ??
       jsonBody.from ??
-      jsonBody.pengirim ??
+      jsonBody?.data?.from ??
+      jsonBody?.data?.sender ??
       jsonBody?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from ??
       jsonBody?.messages?.[0]?.from ??
       "";
@@ -45,19 +41,18 @@ export async function POST(req: NextRequest) {
     const message =
       jsonBody.message ??
       jsonBody.text ??
-      jsonBody.pesan ??
+      jsonBody?.data?.message ??
+      jsonBody?.data?.text ??
       jsonBody?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body ??
       jsonBody?.messages?.[0]?.text?.body ??
       jsonBody?.messages?.[0]?.text ??
       "";
 
-    console.log("[Webhook WA] Extracted:", { sender, message });
+    console.log("[Webhook WA] Event:", eventType, "| Sender:", sender, "| Message:", message);
 
-    // Jika masih kosong, return 200 saja (jangan 400)
-    // supaya api.co.id tidak anggap webhook gagal
     if (!sender || !message) {
-      console.log("[Webhook WA] No sender/message — mungkin event lain (status update, dll)");
-      return NextResponse.json({ ok: true, note: "No message to process" });
+      console.log("[Webhook WA] Bukan pesan teks — dilewati:", JSON.stringify(jsonBody));
+      return NextResponse.json({ ok: true, note: "Non-message event skipped" });
     }
 
     await handlePesanMasuk({ noHp: sender, pesan: message });
