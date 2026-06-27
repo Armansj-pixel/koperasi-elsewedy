@@ -167,7 +167,8 @@ export async function tambahAnggota(formData: FormData) {
     return { success: false, error: "NIK sudah terdaftar di sistem" };
   }
 
-  const defaultPassword = data.nik.slice(-4);
+  // Password default = NIK (6 digit) — memenuhi syarat minimum Supabase Auth (min 6 karakter)
+  const defaultPassword = data.nik;
   const passwordHash = await bcrypt.hash(defaultPassword, 10);
   const virtualEmail = `${data.nik}@koperasi.local`;
   const emailFinal = emailInput !== "" ? emailInput : virtualEmail;
@@ -336,7 +337,8 @@ export async function resetPasswordAnggota(id: string) {
     return { success: false, error: "Anggota tidak ditemukan" };
   }
 
-  const newPassword = user.nik.slice(-4);
+  // Password default = NIK (6 digit) — memenuhi syarat minimum Supabase Auth (min 6 karakter)
+  const newPassword = user.nik;
   const passwordHash = await bcrypt.hash(newPassword, 10);
   const virtualEmail = `${user.nik}@koperasi.local`;
 
@@ -353,9 +355,12 @@ export async function resetPasswordAnggota(id: string) {
   const authUser = authUsers?.users.find((u) => u.email === virtualEmail);
 
   if (authUser) {
-    await supabase.auth.admin.updateUserById(authUser.id, {
+    const { error: updateAuthError } = await supabase.auth.admin.updateUserById(authUser.id, {
       password: newPassword,
     });
+    if (updateAuthError) {
+      console.error("Reset password auth error:", updateAuthError.message);
+    }
   }
 
   revalidatePath("/dashboard/anggota");
@@ -374,7 +379,6 @@ export async function getKalkulasiResign(userId: string) {
   await requireRole(["SUPERADMIN", "BENDAHARA", "SEKRETARIS"]);
   const supabase = createServiceClient();
 
-  // 1. Ambil Profil User
   const { data: user } = await supabase
     .from('users')
     .select('id, nama, nik, is_active')
@@ -383,7 +387,6 @@ export async function getKalkulasiResign(userId: string) {
 
   if (!user) return { error: "Pengguna tidak ditemukan" };
 
-  // 2. Ambil Total Simpanan
   const { data: simpanan } = await supabase
     .from('saldo_simpanan')
     .select('saldo_pokok, saldo_wajib, saldo_sukarela')
@@ -395,7 +398,6 @@ export async function getKalkulasiResign(userId: string) {
     (Number(simpanan?.saldo_wajib) || 0) + 
     (Number(simpanan?.saldo_sukarela) || 0);
 
-  // 3. Ambil Pinjaman Aktif
   const { data: pinjamanAktifData } = await supabase
     .from('pinjaman')
     .select('id, nomor_kontrak, cicilan_per_bulan')
@@ -407,8 +409,6 @@ export async function getKalkulasiResign(userId: string) {
 
   if (pinjamanAktifData && pinjamanAktifData.length > 0) {
     for (const p of pinjamanAktifData) {
-      
-      // LOGIKA KUNCI: Tarik tagihan yang HANYA berstatus SCHEDULED / OVERDUE
       const { data: cicilanBelumLunas, error: cicilanError } = await supabase
         .from('cicilan_pinjaman')
         .select('nominal_cicilan')
@@ -416,7 +416,6 @@ export async function getKalkulasiResign(userId: string) {
         .in('status', ['SCHEDULED', 'OVERDUE']);
 
       if (!cicilanError && cicilanBelumLunas) {
-        // Jumlahkan nominal dari cicilan yang belum dibayar saja
         const sisaHutang = cicilanBelumLunas.reduce((sum, c) => sum + Number(c.nominal_cicilan), 0);
         
         if (sisaHutang > 0) {
@@ -424,7 +423,7 @@ export async function getKalkulasiResign(userId: string) {
           pinjamanAktif.push({
             id: p.id,
             nomor_kontrak: p.nomor_kontrak,
-            sisa_pokok: sisaHutang, // <-- Inilah nilai real-time (bukan 15 juta lagi)
+            sisa_pokok: sisaHutang,
             sisa_cicilan_kali: cicilanBelumLunas.length
           });
         }
@@ -432,7 +431,6 @@ export async function getKalkulasiResign(userId: string) {
     }
   }
 
-  // 4. Kalkulasi Net Settlement (Clearance)
   const netKembalian = totalSimpanan - totalHutangPinjaman;
 
   return {
@@ -461,7 +459,6 @@ export async function eksekusiTutupKeanggotaan(formData: FormData) {
   const kalkulasi = await getKalkulasiResign(userId);
   if (kalkulasi.error) return { success: false, error: kalkulasi.error };
 
-  // 1. Ubah status anggota menjadi Inaktif (Resign)
   const { error: userError } = await supabase
     .from('users')
     .update({ 
@@ -472,7 +469,6 @@ export async function eksekusiTutupKeanggotaan(formData: FormData) {
 
   if (userError) return { success: false, error: "Gagal menonaktifkan pengguna." };
 
-  // 2. Kosongkan Saldo Simpanan 
   await supabase
     .from('saldo_simpanan')
     .update({
@@ -484,11 +480,9 @@ export async function eksekusiTutupKeanggotaan(formData: FormData) {
     })
     .eq('user_id', userId);
 
-  // 3. LUNASKAN paksa semua pinjaman aktif
   if (kalkulasi.pinjamanAktif && kalkulasi.pinjamanAktif.length > 0) {
     const pinjamanIds = kalkulasi.pinjamanAktif.map(p => p.id);
 
-    // Lunas cicilan yang belum dibayar
     await supabase
       .from('cicilan_pinjaman')
       .update({
@@ -498,7 +492,6 @@ export async function eksekusiTutupKeanggotaan(formData: FormData) {
       .in('pinjaman_id', pinjamanIds)
       .in('status', ['SCHEDULED', 'OVERDUE']);
 
-    // Tutup status pinjaman induk
     await supabase
       .from('pinjaman')
       .update({
