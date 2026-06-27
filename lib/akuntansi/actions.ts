@@ -6,8 +6,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 // =====================================================================
-// HELPER: GENERATE NOMOR BUKTI SEQUENTIAL (AUDIT READY)
+// HELPER: GENERATE NOMOR BUKTI JURNAL SEQUENTIAL
 // Format: PREFIX-YYYYMM-0001
+// Sumber: tabel jurnal_induk
 // =====================================================================
 export async function generateNomorBukti(prefix: string, tanggal: string) {
   const supabase = createServiceClient();
@@ -25,6 +26,32 @@ export async function generateNomorBukti(prefix: string, tanggal: string) {
   let seq = 1;
   if (data && data.length > 0) {
     const lastSeqStr = data[0].nomor_bukti.split("-").pop();
+    seq = parseInt(lastSeqStr || "0") + 1;
+  }
+  return `${searchPrefix}${String(seq).padStart(4, "0")}`;
+}
+
+// =====================================================================
+// HELPER: GENERATE NOMOR KONTRAK PINJAMAN SEQUENTIAL
+// Format: CTR-YYYYMM-0001
+// Sumber: tabel pinjaman (bukan jurnal_induk)
+// =====================================================================
+export async function generateNomorKontrak(tanggal: string) {
+  const supabase = createServiceClient();
+  const dateObj = new Date(tanggal);
+  const yyyymm = `${dateObj.getFullYear()}${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
+  const searchPrefix = `CTR-${yyyymm}-`;
+
+  const { data } = await supabase
+    .from("pinjaman")
+    .select("nomor_kontrak")
+    .like("nomor_kontrak", `${searchPrefix}%`)
+    .order("nomor_kontrak", { ascending: false })
+    .limit(1);
+
+  let seq = 1;
+  if (data && data.length > 0) {
+    const lastSeqStr = data[0].nomor_kontrak.split("-").pop();
     seq = parseInt(lastSeqStr || "0") + 1;
   }
   return `${searchPrefix}${String(seq).padStart(4, "0")}`;
@@ -277,7 +304,6 @@ export async function getJurnalUmum(
 
 // =====================================================================
 // GET NERACA SALDO (TRIAL BALANCE) DENGAN FILTER PERIODE
-// Menggunakan tipe_akun & saldo_normal sesuai struktur DB aktual
 // =====================================================================
 export async function getNeracaSaldo(startDate?: string, endDate?: string) {
   await requireRole(["SUPERADMIN", "BENDAHARA", "KETUA", "SEKRETARIS"]);
@@ -290,8 +316,6 @@ export async function getNeracaSaldo(startDate?: string, endDate?: string) {
 
   if (!accounts) return { data: [] };
 
-  // Workaround filter periode yang aman untuk PostgREST
-  // Tarik ID jurnal induk sesuai periode dulu, baru join ke rincian
   let indukQuery = supabase
     .from("jurnal_induk")
     .select("id")
