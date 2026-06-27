@@ -5,7 +5,7 @@ import { requireRole } from '@/lib/auth/session'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
-import { buatJurnalUmum, generateNomorBukti } from '@/lib/akuntansi/actions'
+import { buatJurnalUmum, generateNomorBukti, generateNomorKontrak } from '@/lib/akuntansi/actions'
 import {
   notifPencairanPinjaman,
   notifStatusPinjaman,
@@ -326,7 +326,7 @@ export async function ajukanPinjaman(formData: FormData) {
   }
 
   const catatanFinal = ((parsed.data.catatan_pengaju ?? '').trim() + catatanTopUp).trim()
-  const nomorKontrak = await generateNomorBukti('CTR', new Date().toISOString().split('T')[0])
+  const nomorKontrak = await generateNomorKontrak(new Date().toISOString().split('T')[0])
 
   const { data: pinjaman, error } = await supabase.from('pinjaman').insert({
     user_id: targetUserId,
