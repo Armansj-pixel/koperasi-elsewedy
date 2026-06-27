@@ -19,14 +19,22 @@ export default function AjukanPinjamanForm({
   const [nominal, setNominal] = useState(0);
   const [tenor, setTenor] = useState(12);
 
-  const biayaAdmin = Math.round(nominal * 0.04);
+  // State untuk Override Bendahara
+  const [useCustomAdmin, setUseCustomAdmin] = useState(false);
+  const [useCustomCicilan, setUseCustomCicilan] = useState(false);
+  const [customBiayaAdmin, setCustomBiayaAdmin] = useState(0);
+  const [customCicilanPerBulan, setCustomCicilanPerBulan] = useState(0);
+
+  // Kalkulasi: pakai custom jika override aktif, fallback ke default
+  const defaultBiayaAdmin = Math.round(nominal * 0.04);
+  const biayaAdmin = canOverride && useCustomAdmin ? customBiayaAdmin : defaultBiayaAdmin;
   const totalDiterima = nominal - biayaAdmin;
-  const cicilanPerBulan = tenor > 0 ? Math.round(nominal / tenor) : 0;
+  const defaultCicilanPerBulan = tenor > 0 ? Math.round(nominal / tenor) : 0;
+  const cicilanPerBulan = canOverride && useCustomCicilan ? customCicilanPerBulan : defaultCicilanPerBulan;
 
   function handleNominalChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value.replace(/\D/g, "");
     const val = parseInt(raw) || 0;
-    // KUNCI INPUT: Otomatis tertahan di angka 15.000.000 kalau ngetik lebih
     setNominal(Math.min(val, 15000000));
   }
 
@@ -59,6 +67,14 @@ export default function AjukanPinjamanForm({
         
         .kop-spin { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: kop-spin .7s linear infinite; }
         @keyframes kop-spin { to { transform: rotate(360deg); } }
+
+        .kop-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .kop-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+        .kop-toggle input { opacity: 0; width: 0; height: 0; }
+        .kop-toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #cbd5e1; border-radius: 22px; transition: .2s; }
+        .kop-toggle-slider::before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .2s; }
+        .kop-toggle input:checked + .kop-toggle-slider { background: #dc2626; }
+        .kop-toggle input:checked + .kop-toggle-slider::before { transform: translateX(18px); }
       `}} />
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -126,7 +142,7 @@ export default function AjukanPinjamanForm({
           </div>
         </div>
 
-        {/* Tenor (DIUBAH MENJADI DROPDOWN 1-12 BULAN) */}
+        {/* Tenor */}
         <div>
           <label className="kop-label">
             Tenor Angsuran <span className="kop-req">*</span>
@@ -143,14 +159,107 @@ export default function AjukanPinjamanForm({
               backgroundRepeat: "no-repeat", backgroundPosition: "right 16px top 50%", backgroundSize: "10px auto" 
             }}
           >
-            {/* Generate otomatis opsi 1 sampai 12 */}
             {Array.from({ length: 12 }, (_, i) => i + 1).map((t) => (
-              <option key={t} value={t}>
-                {t} Bulan
-              </option>
+              <option key={t} value={t}>{t} Bulan</option>
             ))}
           </select>
         </div>
+
+        {/* ── SECTION OVERRIDE BENDAHARA ────────────────────────────── */}
+        {canOverride && (
+          <div style={{ background: "#fefce8", border: "1.5px solid #fde68a", borderRadius: "14px", padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div style={{ fontWeight: "800", fontSize: "13px", color: "#92400e", display: "flex", alignItems: "center", gap: "8px" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Override Parameter (Admin Only)
+            </div>
+
+            {/* Toggle Override Biaya Admin */}
+            <div>
+              <div className="kop-toggle-row">
+                <label style={{ fontSize: "13px", fontWeight: "700", color: "#78350f" }}>
+                  Override Biaya Admin
+                </label>
+                <label className="kop-toggle">
+                  <input
+                    type="checkbox"
+                    checked={useCustomAdmin}
+                    onChange={(e) => {
+                      setUseCustomAdmin(e.target.checked);
+                      if (!e.target.checked) setCustomBiayaAdmin(0);
+                    }}
+                  />
+                  <span className="kop-toggle-slider" />
+                </label>
+              </div>
+              {useCustomAdmin ? (
+                <>
+                  <div className="kop-input-curr">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={customBiayaAdmin > 0 ? customBiayaAdmin.toLocaleString("id-ID") : ""}
+                      onChange={(e) => setCustomBiayaAdmin(parseInt(e.target.value.replace(/\D/g, "")) || 0)}
+                      placeholder="0"
+                      className="kop-input"
+                      style={{ borderColor: "#fbbf24" }}
+                    />
+                    <input type="hidden" name="custom_biaya_admin" value={customBiayaAdmin} />
+                  </div>
+                  <p style={{ fontSize: "11px", color: "#92400e", marginTop: "6px", fontWeight: "600" }}>
+                    Default 4%: {formatRupiah(defaultBiayaAdmin)}. Diisi {formatRupiah(customBiayaAdmin)}.
+                  </p>
+                </>
+              ) : (
+                // Jika toggle off, jangan kirim field custom ke server
+                null
+              )}
+            </div>
+
+            {/* Toggle Override Cicilan Per Bulan */}
+            <div>
+              <div className="kop-toggle-row">
+                <label style={{ fontSize: "13px", fontWeight: "700", color: "#78350f" }}>
+                  Override Cicilan per Bulan
+                </label>
+                <label className="kop-toggle">
+                  <input
+                    type="checkbox"
+                    checked={useCustomCicilan}
+                    onChange={(e) => {
+                      setUseCustomCicilan(e.target.checked);
+                      if (!e.target.checked) setCustomCicilanPerBulan(0);
+                    }}
+                  />
+                  <span className="kop-toggle-slider" />
+                </label>
+              </div>
+              {useCustomCicilan ? (
+                <>
+                  <div className="kop-input-curr">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={customCicilanPerBulan > 0 ? customCicilanPerBulan.toLocaleString("id-ID") : ""}
+                      onChange={(e) => setCustomCicilanPerBulan(parseInt(e.target.value.replace(/\D/g, "")) || 0)}
+                      placeholder="0"
+                      className="kop-input"
+                      style={{ borderColor: "#fbbf24" }}
+                    />
+                    <input type="hidden" name="custom_cicilan_per_bulan" value={customCicilanPerBulan} />
+                  </div>
+                  <p style={{ fontSize: "11px", color: "#92400e", marginTop: "6px", fontWeight: "600" }}>
+                    Default: {formatRupiah(defaultCicilanPerBulan)}/bulan. Diisi {formatRupiah(customCicilanPerBulan)}/bulan.
+                  </p>
+                </>
+              ) : null}
+            </div>
+
+            <p style={{ fontSize: "11px", color: "#a16207", fontWeight: "600", margin: 0 }}>
+              ⚠️ Override akan tercatat di audit trail sistem. Gunakan hanya untuk kasus khusus.
+            </p>
+          </div>
+        )}
+        {/* ──────────────────────────────────────────────────────────── */}
 
         {/* Ringkasan Kalkulasi */}
         {nominal > 0 && (
@@ -158,13 +267,18 @@ export default function AjukanPinjamanForm({
             <div style={{ fontWeight: "800", fontSize: "14px", color: "#0f172a", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
               Simulasi Pencairan
+              {canOverride && (useCustomAdmin || useCustomCicilan) && (
+                <span style={{ fontSize: "10px", background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: "10px", fontWeight: "800" }}>
+                  OVERRIDE AKTIF
+                </span>
+              )}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "10px", fontWeight: "600", color: "#475569" }}>
               <span>Nominal pinjaman</span>
               <span style={{ color: "#1e293b" }}>{formatRupiah(nominal)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "12px", fontWeight: "600", color: "#dc2626" }}>
-              <span>Biaya admin (4%)</span>
+              <span>Biaya admin {canOverride && useCustomAdmin ? "(custom)" : "(4%)"}</span>
               <span>- {formatRupiah(biayaAdmin)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", fontWeight: "800", color: "#0f172a", borderTop: "1.5px dashed #cbd5e1", paddingTop: "12px", marginBottom: "12px" }}>
@@ -172,24 +286,31 @@ export default function AjukanPinjamanForm({
               <span style={{ color: "#16a34a" }}>{formatRupiah(totalDiterima)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", background: "#eff6ff", border: "1.5px solid #bfdbfe", padding: "12px 16px", borderRadius: "12px" }}>
-              <span style={{ fontWeight: "800", color: "#1d4ed8", fontSize: "13px" }}>Cicilan per bulan</span>
+              <span style={{ fontWeight: "800", color: "#1d4ed8", fontSize: "13px" }}>
+                Cicilan per bulan {canOverride && useCustomCicilan ? "(custom)" : ""}
+              </span>
               <span style={{ fontWeight: "900", fontSize: "16px", color: "#1d4ed8", letterSpacing: "-.02em" }}>{formatRupiah(cicilanPerBulan)}</span>
             </div>
           </div>
         )}
 
-        {/* Catatan */}
+        {/* Catatan / Keperluan — WAJIB */}
         <div>
           <label className="kop-label">
-            Catatan / Keperluan <span style={{ color: "#94a3b8", fontWeight: "500" }}>(opsional)</span>
+            Keperluan Pinjaman <span className="kop-req">*</span>
           </label>
           <textarea
             name="catatan_pengaju"
             rows={3}
-            placeholder="Contoh: Keperluan biaya sekolah anak"
+            placeholder="Contoh: Keperluan biaya sekolah anak semester ganjil"
             className="kop-input"
             style={{ resize: "vertical" }}
+            required
+            minLength={5}
           />
+          <p style={{ fontSize: "11px", color: "#64748b", marginTop: "6px", fontWeight: "600" }}>
+            Wajib diisi minimal 5 karakter. Jelaskan tujuan penggunaan dana secara singkat.
+          </p>
         </div>
 
         {/* Submit */}
