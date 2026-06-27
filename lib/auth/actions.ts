@@ -71,15 +71,8 @@ export async function loginAction(
 
     if (authUser) {
       // Auth user sudah ada — sync password-nya dengan yang baru diverifikasi
-      const { data: updatedUser, error: updateAuthError } =
+      const { error: updateAuthError } =
         await serviceClient.auth.admin.updateUserById(authUser.id, { password });
-
-      console.log("[LOGIN] updateUserById result:", {
-        authUserId: authUser.id,
-        email: authUser.email,
-        updateError: updateAuthError?.message ?? null,
-        updatedEmail: updatedUser?.user?.email ?? null,
-      });
 
       if (updateAuthError) {
         return {
@@ -89,7 +82,6 @@ export async function loginAction(
       }
     } else {
       // Auth user belum ada — buat baru
-      console.log("[LOGIN] Auth user tidak ditemukan, membuat baru untuk:", virtualEmail);
 
       const { error: createError } = await serviceClient.auth.admin.createUser({
         email: virtualEmail,
@@ -111,18 +103,12 @@ export async function loginAction(
       }
     }
 
-    // Delay kecil untuk memberi waktu Supabase Auth propagate perubahan password
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // 5. Pastikan tidak ada session lama yang corrupt, lalu sign in
+    await supabase.auth.signOut();
 
-    // 5. Sign in
     const { error: authError } = await supabase.auth.signInWithPassword({
       email: virtualEmail,
       password,
-    });
-
-    console.log("[LOGIN] signInWithPassword result:", {
-      email: virtualEmail,
-      error: authError?.message ?? null,
     });
 
     if (authError) {
