@@ -54,29 +54,31 @@ export async function loginAction(
       };
     }
 
-    // 3. Verifikasi password dengan bcrypt
+    // 3. Verifikasi password dengan bcrypt (source of truth = tabel users)
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
       return { success: false, error: "Password salah" };
     }
 
-    // 4. Login berhasil - buat session via Supabase Auth
+    // 4. Sync password ke Supabase Auth agar selalu konsisten dengan DB,
+    //    lalu baru sign in. Ini menghilangkan masalah desync akibat reset
+    //    password, change password, atau auth user yang belum ada.
     const supabase = createClient();
-
-    // Sign in dengan virtual email
     const virtualEmail = `${nik}@koperasi.local`;
 
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: virtualEmail,
-      password: password,
-    });
+    const { data: authUsers } = await serviceClient.auth.admin.listUsers();
+    const authUser = authUsers?.users.find((u) => u.email === virtualEmail);
 
-    // Kalau auth user belum ada di Supabase Auth, buat dulu
-    if (authError && authError.message.includes("Invalid login")) {
-      // Create auth user via service client
+    if (authUser) {
+      // Auth user sudah ada — sync password-nya dengan yang baru diverifikasi
+      await serviceClient.auth.admin.updateUserById(authUser.id, {
+        password,
+      });
+    } else {
+      // Auth user belum ada — buat baru
       const { error: createError } = await serviceClient.auth.admin.createUser({
         email: virtualEmail,
-        password: password,
+        password,
         email_confirm: true,
         user_metadata: {
           nik: user.nik,
@@ -92,27 +94,25 @@ export async function loginAction(
           error: "Gagal membuat session: " + createError.message,
         };
       }
+    }
 
-      // Coba sign in lagi
-      const retry = await supabase.auth.signInWithPassword({
-        email: virtualEmail,
-        password: password,
-      });
+    // 5. Sign in — dijamin berhasil karena password baru saja di-sync
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: virtualEmail,
+      password,
+    });
 
-      if (retry.error) {
-        return { success: false, error: "Login gagal: " + retry.error.message };
-      }
-    } else if (authError) {
+    if (authError) {
       return { success: false, error: "Login gagal: " + authError.message };
     }
 
-    // 5. Update last_login_at
+    // 6. Update last_login_at
     await serviceClient
       .from("users")
       .update({ last_login_at: new Date().toISOString() })
       .eq("id", user.id);
 
-    // 6. Tentukan redirect berdasarkan must_change_password
+    // 7. Tentukan redirect berdasarkan must_change_password
     const redirectTo = user.must_change_password ? "/change-password" : "/dashboard";
 
     return {
