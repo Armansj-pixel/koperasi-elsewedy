@@ -243,7 +243,10 @@ const AjukanPinjamanSchema = z.object({
   user_id: z.string().uuid().optional(),
   nominal: z.number().min(100000, 'Minimal pinjaman Rp 100.000').max(15000000, 'Maksimal pinjaman Rp 15.000.000'),
   tenor_bulan: z.number().min(1).max(12),
-  catatan_pengaju: z.string().optional(),
+  catatan_pengaju: z.string().min(5, 'Kolom keperluan pinjaman wajib diisi secara detail!'),
+  // Parameter tambahan khusus mode Override Bendahara
+  custom_biaya_admin: z.number().min(0).optional(),
+  custom_cicilan_per_bulan: z.number().min(0).optional(),
 })
 
 export async function ajukanPinjaman(formData: FormData) {
@@ -260,6 +263,9 @@ export async function ajukanPinjaman(formData: FormData) {
     nominal,
     tenor_bulan: tenor,
     catatan_pengaju: formData.get('catatan_pengaju') as string,
+    // Ambil nilai custom dari form (jika diisi oleh Bendahara)
+    custom_biaya_admin: formData.get('custom_biaya_admin') ? parseInt(formData.get('custom_biaya_admin') as string) : undefined,
+    custom_cicilan_per_bulan: formData.get('custom_cicilan_per_bulan') ? parseInt(formData.get('custom_cicilan_per_bulan') as string) : undefined,
   })
 
   if (!parsed.success) {
@@ -290,27 +296,40 @@ export async function ajukanPinjaman(formData: FormData) {
 
       const jumlahSisaBulan = cicilanBelumLunas?.length || 0
 
-      if (jumlahSisaBulan > 5) {
-        redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Ditolak mutlak. Sisa cicilan masih ${jumlahSisaBulan}x (maks absolut 5).`)}`)
-      }
-      if (jumlahSisaBulan > 3 && !canOverride) {
-        redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Ditolak. Top-Up reguler maks sisa 3x. Sisa: ${jumlahSisaBulan}x.`)}`)
+      // ATURAN BARU: Jika bukan pengurus, tolak jika sisa > 3.
+      // Jika pengurus (canOverride), biarkan lolos berapapun sisa cicilannya (bypass limit).
+      if (!canOverride && jumlahSisaBulan > 3) {
+        redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Ditolak. Top-Up reguler maks sisa 3x. Sisa cicilan: ${jumlahSisaBulan}x.`)}`)
       }
 
       sisaPelunasanLama = cicilanBelumLunas?.reduce((t, c) => t + Number(c.nominal_cicilan), 0) || 0
       idPinjamanLamaLunas = pinjamanSekarang.id
       catatanTopUp = `\n\n[SISTEM TOP-UP] Dipotong otomatis Rp ${sisaPelunasanLama.toLocaleString('id-ID')} untuk pelunasan kontrak lama.`
+
+      // Tambahkan cap Audit Trail jika Bendahara melakukan Bypass
       if (jumlahSisaBulan > 3 && canOverride) {
-        catatanTopUp += `\n[URGENCY OVERRIDE] Di-bypass oleh ${session.role} (sisa ${jumlahSisaBulan}x).`
+        catatanTopUp += `\n[URGENCY OVERRIDE] Limit bypass dieksekusi oleh ${session.role} (sisa sebelumnya: ${jumlahSisaBulan}x).`
       }
     }
   }
 
-  const { biayaAdmin, totalDiterima, cicilanPerBulan } = await hitungPinjaman(nominal, tenor)
+  let { biayaAdmin, totalDiterima, cicilanPerBulan } = await hitungPinjaman(nominal, tenor)
+
+  // LOGIKA OVERRIDE MANUAL BENDAHARA
+  if (canOverride) {
+    if (parsed.data.custom_biaya_admin !== undefined) {
+      biayaAdmin = parsed.data.custom_biaya_admin
+      totalDiterima = nominal - biayaAdmin // Kalkulasi ulang uang cair
+    }
+    if (parsed.data.custom_cicilan_per_bulan !== undefined) {
+      cicilanPerBulan = parsed.data.custom_cicilan_per_bulan // Override cicilan flat
+    }
+  }
+
   const totalDiterimaBersih = totalDiterima - sisaPelunasanLama
 
   if (totalDiterimaBersih <= 0) {
-    redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent('Nominal terlalu kecil untuk menutupi sisa pinjaman lama.')}`)
+    redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent('Nominal pencairan bersih terlalu kecil untuk menutupi sisa pinjaman lama.')}`)
   }
 
   const catatanFinal = ((parsed.data.catatan_pengaju ?? '').trim() + catatanTopUp).trim()
@@ -417,7 +436,6 @@ export async function approvePinjaman(formData: FormData) {
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
 
   // ── NOTIFIKASI WA ─────────────────────────────────────────────────
-  // Fire-and-forget: tidak block redirect meski WA gagal
   const userInfo = await getUserNoHp(supabase, pinjaman.user_id)
   if (userInfo?.no_hp) {
     const statusWA = action === 'reject'
@@ -588,7 +606,6 @@ export async function bayarCicilan(formData: FormData) {
     const userInfo = await getUserNoHp(supabase, pinjamanUpdated.user_id)
     if (userInfo?.no_hp) {
       if (semuaLunas) {
-        // Kirim notif lunas
         notifPinjamanLunas({
           noHp: userInfo.no_hp,
           nama: userInfo.nama,
@@ -596,7 +613,6 @@ export async function bayarCicilan(formData: FormData) {
           tanggalLunas: tanggalBayar,
         }).catch(console.error)
       } else {
-        // Kirim notif angsuran biasa
         notifAngsuranManual({
           noHp: userInfo.no_hp,
           nama: userInfo.nama,
