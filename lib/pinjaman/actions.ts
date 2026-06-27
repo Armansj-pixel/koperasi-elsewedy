@@ -9,7 +9,6 @@ import { buatJurnalUmum, generateNomorBukti } from '@/lib/akuntansi/actions'
 import {
   notifPencairanPinjaman,
   notifStatusPinjaman,
-  notifAngsuranManual,
   notifPinjamanLunas,
   notifPengajuanDiterima,
 } from '@/lib/notification/whatsapp'
@@ -244,7 +243,6 @@ const AjukanPinjamanSchema = z.object({
   nominal: z.number().min(100000, 'Minimal pinjaman Rp 100.000').max(15000000, 'Maksimal pinjaman Rp 15.000.000'),
   tenor_bulan: z.number().min(1).max(12),
   catatan_pengaju: z.string().min(5, 'Kolom keperluan pinjaman wajib diisi secara detail!'),
-  // Parameter tambahan khusus mode Override Bendahara
   custom_biaya_admin: z.number().min(0).optional(),
   custom_cicilan_per_bulan: z.number().min(0).optional(),
 })
@@ -263,7 +261,6 @@ export async function ajukanPinjaman(formData: FormData) {
     nominal,
     tenor_bulan: tenor,
     catatan_pengaju: formData.get('catatan_pengaju') as string,
-    // Ambil nilai custom dari form (jika diisi oleh Bendahara)
     custom_biaya_admin: formData.get('custom_biaya_admin') ? parseInt(formData.get('custom_biaya_admin') as string) : undefined,
     custom_cicilan_per_bulan: formData.get('custom_cicilan_per_bulan') ? parseInt(formData.get('custom_cicilan_per_bulan') as string) : undefined,
   })
@@ -296,8 +293,6 @@ export async function ajukanPinjaman(formData: FormData) {
 
       const jumlahSisaBulan = cicilanBelumLunas?.length || 0
 
-      // ATURAN BARU: Jika bukan pengurus, tolak jika sisa > 3.
-      // Jika pengurus (canOverride), biarkan lolos berapapun sisa cicilannya (bypass limit).
       if (!canOverride && jumlahSisaBulan > 3) {
         redirect(`/dashboard/pinjaman/ajukan?error=${encodeURIComponent(`Ditolak. Top-Up reguler maks sisa 3x. Sisa cicilan: ${jumlahSisaBulan}x.`)}`)
       }
@@ -306,7 +301,6 @@ export async function ajukanPinjaman(formData: FormData) {
       idPinjamanLamaLunas = pinjamanSekarang.id
       catatanTopUp = `\n\n[SISTEM TOP-UP] Dipotong otomatis Rp ${sisaPelunasanLama.toLocaleString('id-ID')} untuk pelunasan kontrak lama.`
 
-      // Tambahkan cap Audit Trail jika Bendahara melakukan Bypass
       if (jumlahSisaBulan > 3 && canOverride) {
         catatanTopUp += `\n[URGENCY OVERRIDE] Limit bypass dieksekusi oleh ${session.role} (sisa sebelumnya: ${jumlahSisaBulan}x).`
       }
@@ -315,14 +309,13 @@ export async function ajukanPinjaman(formData: FormData) {
 
   let { biayaAdmin, totalDiterima, cicilanPerBulan } = await hitungPinjaman(nominal, tenor)
 
-  // LOGIKA OVERRIDE MANUAL BENDAHARA
   if (canOverride) {
     if (parsed.data.custom_biaya_admin !== undefined) {
       biayaAdmin = parsed.data.custom_biaya_admin
-      totalDiterima = nominal - biayaAdmin // Kalkulasi ulang uang cair
+      totalDiterima = nominal - biayaAdmin
     }
     if (parsed.data.custom_cicilan_per_bulan !== undefined) {
-      cicilanPerBulan = parsed.data.custom_cicilan_per_bulan // Override cicilan flat
+      cicilanPerBulan = parsed.data.custom_cicilan_per_bulan
     }
   }
 
@@ -405,6 +398,7 @@ export async function approvePinjaman(formData: FormData) {
   }
 
   let updateData: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  let statusAkhir: string | null = null
 
   if (action === 'reject') {
     if (!catatan.trim()) {
@@ -417,6 +411,7 @@ export async function approvePinjaman(formData: FormData) {
       rejected_by: session.id,
       rejected_at: new Date().toISOString(),
     }
+    statusAkhir = 'REJECTED'
   } else {
     const nextStatus: Record<string, PinjamanStatus> = {
       PENDING_L1: 'PENDING_L2',
@@ -428,27 +423,28 @@ export async function approvePinjaman(formData: FormData) {
       PENDING_L2: { approved_l2_by: session.id, approved_l2_at: new Date().toISOString(), catatan_l2: catatan.trim() || null },
       PENDING_L3: { approved_l3_by: session.id, approved_l3_at: new Date().toISOString(), catatan_l3: catatan.trim() || null },
     }
-    updateData = { ...updateData, status: nextStatus[pinjaman.status], ...levelFields[pinjaman.status] }
+    const next = nextStatus[pinjaman.status]
+    updateData = { ...updateData, status: next, ...levelFields[pinjaman.status] }
+    // Hanya kirim WA jika status akhir APPROVED (dari PENDING_L3)
+    if (next === 'APPROVED') statusAkhir = 'APPROVED'
   }
 
   await supabase.from('pinjaman').update(updateData).eq('id', pinjamanId)
   revalidatePath('/dashboard/pinjaman')
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
 
-  // ── NOTIFIKASI WA ─────────────────────────────────────────────────
-  const userInfo = await getUserNoHp(supabase, pinjaman.user_id)
-  if (userInfo?.no_hp) {
-    const statusWA = action === 'reject'
-      ? 'REJECTED'
-      : ({ PENDING_L1: 'PENDING_L2', PENDING_L2: 'PENDING_L3', PENDING_L3: 'APPROVED' } as Record<string, any>)[pinjaman.status]
-
-    notifStatusPinjaman({
-      noHp: userInfo.no_hp,
-      nama: userInfo.nama,
-      nomorKontrak: pinjaman.nomor_kontrak,
-      status: statusWA,
-      catatan: catatan.trim() || undefined,
-    }).catch(console.error)
+  // ── NOTIFIKASI WA — hanya APPROVED atau REJECTED ──────────────────
+  if (statusAkhir) {
+    const userInfo = await getUserNoHp(supabase, pinjaman.user_id)
+    if (userInfo?.no_hp) {
+      notifStatusPinjaman({
+        noHp: userInfo.no_hp,
+        nama: userInfo.nama,
+        nomorKontrak: pinjaman.nomor_kontrak,
+        status: statusAkhir as 'APPROVED' | 'REJECTED',
+        catatan: catatan.trim() || undefined,
+      }).catch(console.error)
+    }
   }
   // ─────────────────────────────────────────────────────────────────
 
@@ -533,7 +529,7 @@ export async function cairkanPinjaman(formData: FormData) {
     ],
   })
 
-  // ── NOTIFIKASI WA ─────────────────────────────────────────────────
+  // ── NOTIFIKASI WA — Pencairan ─────────────────────────────────────
   const userInfo = await getUserNoHp(supabase, pinjaman.user_id)
   if (userInfo?.no_hp) {
     notifPencairanPinjaman({
@@ -555,7 +551,8 @@ export async function cairkanPinjaman(formData: FormData) {
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pencairan berhasil! Jurnal Akuntansi otomatis tercatat.')}`)
 }
 
-// ─── ACTION: Bayar Cicilan Manual + JURNAL + NOTIFIKASI ──────────────────────
+// ─── ACTION: Bayar Cicilan Manual + JURNAL ────────────────────────────────────
+// Notif WA hanya dikirim jika pinjaman LUNAS setelah pembayaran ini
 export async function bayarCicilan(formData: FormData) {
   const session = await requireRole(['BENDAHARA', 'SUPERADMIN'])
 
@@ -602,29 +599,19 @@ export async function bayarCicilan(formData: FormData) {
       ],
     })
 
-    // ── NOTIFIKASI WA ───────────────────────────────────────────────
-    const userInfo = await getUserNoHp(supabase, pinjamanUpdated.user_id)
-    if (userInfo?.no_hp) {
-      if (semuaLunas) {
+    // ── NOTIFIKASI WA — hanya jika LUNAS ─────────────────────────────
+    if (semuaLunas) {
+      const userInfo = await getUserNoHp(supabase, pinjamanUpdated.user_id)
+      if (userInfo?.no_hp) {
         notifPinjamanLunas({
           noHp: userInfo.no_hp,
           nama: userInfo.nama,
           nomorKontrak: pinjamanUpdated.nomor_kontrak,
           tanggalLunas: tanggalBayar,
         }).catch(console.error)
-      } else {
-        notifAngsuranManual({
-          noHp: userInfo.no_hp,
-          nama: userInfo.nama,
-          nomorKontrak: pinjamanUpdated.nomor_kontrak,
-          nominalBayar,
-          tanggalBayar,
-          sisaCicilan: sisaKali,
-          sisaPokok,
-        }).catch(console.error)
       }
     }
-    // ───────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────
   }
 
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
@@ -676,7 +663,7 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
     })
   }
 
-  // ── NOTIFIKASI WA ─────────────────────────────────────────────────
+  // ── NOTIFIKASI WA — Lunas ─────────────────────────────────────────
   const userInfo = await getUserNoHp(supabase, pinjaman.user_id)
   if (userInfo?.no_hp) {
     notifPinjamanLunas({
