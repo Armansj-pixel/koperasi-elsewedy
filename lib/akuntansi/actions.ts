@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { auditKas } from '@/lib/audit/actions'
 
 // =====================================================================
 // HELPER: GENERATE NOMOR BUKTI JURNAL SEQUENTIAL
@@ -174,7 +175,7 @@ const TopUpSchema = z.object({
 });
 
 export async function topUpKasKecil(formData: FormData) {
-  await requireRole(["BENDAHARA", "SUPERADMIN"]);
+  const session = await requireRole(["BENDAHARA", "SUPERADMIN"]);
 
   const parsed = TopUpSchema.safeParse({
     nominal: formData.get("nominal"),
@@ -186,16 +187,30 @@ export async function topUpKasKecil(formData: FormData) {
 
   const { nominal, sumber_bank, tanggal, keterangan } = parsed.data;
 
-  return buatJurnalUmum({
-    prefix_bukti: "CASHTOPUP",
+  const resultTopUp = await buatJurnalUmum({
+    prefix_bukti: 'CASHTOPUP',
     tanggal_transaksi: tanggal,
-    keterangan: keterangan || "Tarik tunai untuk pengisian Kas Kecil",
-    jenis_sumber: "MANUAL",
+    keterangan: keterangan || 'Tarik tunai untuk pengisian Kas Kecil',
+    jenis_sumber: 'MANUAL',
     lines: [
-      { kode_akun: "101", debit: nominal, kredit: 0 },
+      { kode_akun: '101', debit: nominal, kredit: 0 },
       { kode_akun: sumber_bank, debit: 0, kredit: nominal },
     ],
-  });
+  })
+  
+  if (resultTopUp.success) {
+    auditKas(
+      { id: session.id, nama: session.nama ?? '', role: session.role },
+      'TOPUP_KAS_KECIL',
+      `Top-up kas kecil Rp ${nominal.toLocaleString('id-ID')} dari ${sumber_bank}`,
+      {
+        entityId: String(resultTopUp.jurnalIndukId ?? ''),
+        nominal,
+        nilaiBaru: { sumber_bank, nominal, tanggal, keterangan },
+      }
+    ).catch(console.error)
+  }
+  return resultTopUp
 }
 
 // =====================================================================
@@ -210,7 +225,7 @@ const PengeluaranSchema = z.object({
 });
 
 export async function catatPengeluaranOperasional(formData: FormData) {
-  await requireRole(["BENDAHARA", "SUPERADMIN"]);
+  const session = await requireRole(["BENDAHARA", "SUPERADMIN"]);
 
   const parsed = PengeluaranSchema.safeParse({
     nominal: formData.get("nominal"),
@@ -223,16 +238,30 @@ export async function catatPengeluaranOperasional(formData: FormData) {
 
   const { nominal, akun_biaya, sumber_dana, tanggal, keterangan } = parsed.data;
 
-  return buatJurnalUmum({
-    prefix_bukti: "EXP",
+  const resultExp = await buatJurnalUmum({
+    prefix_bukti: 'EXP',
     tanggal_transaksi: tanggal,
     keterangan,
-    jenis_sumber: "MANUAL",
+    jenis_sumber: 'MANUAL',
     lines: [
       { kode_akun: akun_biaya, debit: nominal, kredit: 0 },
       { kode_akun: sumber_dana, debit: 0, kredit: nominal },
     ],
-  });
+  })
+  
+  if (resultExp.success) {
+    auditKas(
+      { id: session.id, nama: session.nama ?? '', role: session.role },
+      'CATAT_PENGELUARAN',
+      `Pengeluaran operasional — ${keterangan} — Rp ${nominal.toLocaleString('id-ID')}`,
+      {
+        entityId: String(resultExp.jurnalIndukId ?? ''),
+        nominal,
+        nilaiBaru: { akun_biaya, sumber_dana, nominal, tanggal, keterangan },
+      }
+    ).catch(console.error)
+  }
+  return resultExp
 }
 
 // =====================================================================
@@ -247,7 +276,7 @@ const PendapatanSchema = z.object({
 });
 
 export async function catatPendapatanLain(formData: FormData) {
-  await requireRole(["BENDAHARA", "SUPERADMIN"]);
+  const session = await requireRole(["BENDAHARA", "SUPERADMIN"]);
 
   const parsed = PendapatanSchema.safeParse({
     nominal: formData.get("nominal"),
@@ -260,16 +289,30 @@ export async function catatPendapatanLain(formData: FormData) {
 
   const { nominal, akun_pendapatan, tujuan_dana, tanggal, keterangan } = parsed.data;
 
-  return buatJurnalUmum({
-    prefix_bukti: "INC",
+  const resultInc = await buatJurnalUmum({
+    prefix_bukti: 'INC',
     tanggal_transaksi: tanggal,
     keterangan,
-    jenis_sumber: "MANUAL",
+    jenis_sumber: 'MANUAL',
     lines: [
       { kode_akun: tujuan_dana, debit: nominal, kredit: 0 },
       { kode_akun: akun_pendapatan, debit: 0, kredit: nominal },
     ],
-  });
+  })
+  
+  if (resultInc.success) {
+    auditKas(
+      { id: session.id, nama: session.nama ?? '', role: session.role },
+      'CATAT_PENDAPATAN',
+      `Pendapatan lain — ${keterangan} — Rp ${nominal.toLocaleString('id-ID')}`,
+      {
+        entityId: String(resultInc.jurnalIndukId ?? ''),
+        nominal,
+        nilaiBaru: { akun_pendapatan, tujuan_dana, nominal, tanggal, keterangan },
+      }
+    ).catch(console.error)
+  }
+  return resultInc
 }
 
 // =====================================================================
