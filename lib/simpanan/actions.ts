@@ -11,6 +11,7 @@ import {
   notifPenarikanDisetujui,
   notifPenarikanDitolak,
 } from "@/lib/notification/whatsapp";
+import { auditSimpanan } from '@/lib/audit/actions'
 
 // =====================================================================
 // SCHEMAS
@@ -244,6 +245,25 @@ export async function inputSetoran(formData: FormData) {
   revalidatePath(`/dashboard/simpanan/${data.user_id}`);
   revalidatePath("/dashboard/anggota");
 
+  auditSimpanan(
+    { id: currentUser.id, nama: currentUser.nama ?? '', role: currentUser.role },
+    'SETORAN_MANUAL',
+    `Setoran ${data.jenis_simpanan.replace('_', ' ').toLowerCase()} a/n ${user.nama} — Rp ${data.nominal.toLocaleString('id-ID')}`,
+    {
+      entityId: insertedRiwayat?.id?.toString(),
+      nominal:  data.nominal,
+      nilaiBaru: {
+        user_id:       data.user_id,
+        user_nama:     user.nama,
+        jenis:         data.jenis_simpanan,
+        nominal:       data.nominal,
+        tanggal:       tanggalFinal,
+        periode:       periodeFinal,
+        saldo_setelah: Number(saldoBaru?.total_saldo ?? 0),
+      },
+    }
+  ).catch(console.error)
+
   return {
     success: true,
     message: `✅ Setoran Rp ${data.nominal.toLocaleString("id-ID")} untuk ${user.nama} berhasil dicatat & Dijurnal!`,
@@ -362,6 +382,25 @@ export async function inputSetoranBulananMassal(bulan: number, tahun: number) {
   revalidatePath("/dashboard/simpanan");
   revalidatePath("/dashboard/anggota");
 
+  auditSimpanan(
+    { id: currentUser.id, nama: currentUser.nama ?? '', role: currentUser.role },
+    'SETORAN_MASSAL_PAYROLL',
+    `Payroll simpanan ${namaBulan} — wajib: ${berhasilWajib} anggota, sukarela: ${berhasilSukarela} anggota — total Rp ${totalPayrollSimpanan.toLocaleString('id-ID')}`,
+    {
+      nominal: totalPayrollSimpanan,
+      nilaiBaru: {
+        periode:           `${tahun}-${String(bulan).padStart(2, '0')}`,
+        berhasil_wajib:    berhasilWajib,
+        berhasil_sukarela: berhasilSukarela,
+        dilewati:          dilewati,
+        gagal:             gagal,
+        total_wajib:       totalWajibTerkumpul,
+        total_sukarela:    totalSukarelaTerkumpul,
+        nomor_jurnal:      nomorBuktiPayroll,
+      },
+    }
+  ).catch(console.error)
+
   return {
     success: true,
     message: `✅ Payroll ${namaBulan} selesai & Jurnal Tercatat! Wajib: ${berhasilWajib}, Sukarela: ${berhasilSukarela}${gagal > 0 ? `, Gagal: ${gagal}` : ''}.`,
@@ -423,6 +462,21 @@ export async function ajukanPenarikan(formData: FormData) {
   // ─────────────────────────────────────────────────────────────────
 
   revalidatePath("/dashboard/simpanan");
+
+  auditSimpanan(
+    { id: currentUser.id, nama: currentUser.nama ?? '', role: currentUser.role },
+    'AJUKAN_PENARIKAN',
+    `Pengajuan penarikan simpanan sukarela — Rp ${parsed.data.nominal.toLocaleString('id-ID')}`,
+    {
+      nominal: parsed.data.nominal,
+      nilaiBaru: {
+        nominal: parsed.data.nominal,
+        catatan: parsed.data.catatan,
+        status:  'PENDING',
+      },
+    }
+  ).catch(console.error)
+
   return {
     success: true,
     message: `✅ Pengajuan penarikan Rp ${parsed.data.nominal.toLocaleString("id-ID")} berhasil dikirim.`,
@@ -513,6 +567,23 @@ export async function updateStatusPenarikan(
     }
     // ───────────────────────────────────────────────────────────────
 
+    auditSimpanan(
+      { id: currentUser.id, nama: currentUser.nama ?? '', role: currentUser.role },
+      'APPROVE_PENARIKAN',
+      `Penarikan disetujui a/n ${userInfo?.nama ?? penarikan.user_id} — Rp ${Number(penarikan.nominal).toLocaleString('id-ID')} dicairkan`,
+      {
+        entityId: penarikanId,
+        nominal:  Number(penarikan.nominal),
+        nilaiLama: { status: 'PENDING' },
+        nilaiBaru: {
+          status:           'APPROVED',
+          nominal:          penarikan.nominal,
+          saldo_sukarela_sisa: Number(saldoSisa?.saldo_sukarela ?? 0),
+          catatan:          catatan || null,
+        },
+      }
+    ).catch(console.error)
+
   } else {
     // ── NOTIFIKASI WA — Ditolak ────────────────────────────────────
     if (userInfo?.no_hp) {
@@ -524,6 +595,18 @@ export async function updateStatusPenarikan(
       }).catch(console.error)
     }
     // ───────────────────────────────────────────────────────────────
+
+    auditSimpanan(
+      { id: currentUser.id, nama: currentUser.nama ?? '', role: currentUser.role },
+      'REJECT_PENARIKAN',
+      `Penarikan ditolak a/n ${userInfo?.nama ?? penarikan.user_id} — alasan: "${catatan || 'Ditolak oleh Bendahara'}"`,
+      {
+        entityId: penarikanId,
+        nominal:  Number(penarikan.nominal),
+        nilaiLama: { status: 'PENDING' },
+        nilaiBaru: { status: 'REJECTED', rejected_reason: catatan },
+      }
+    ).catch(console.error)
   }
 
   revalidatePath("/dashboard/simpanan");
