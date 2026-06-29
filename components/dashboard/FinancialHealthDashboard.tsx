@@ -2,11 +2,10 @@
 
 // ─────────────────────────────────────────
 // components/dashboard/FinancialHealthDashboard.tsx
-// Main client component — terima data dari Server Component
 // ─────────────────────────────────────────
 
 import type { DashboardData } from '@/types/dashboard'
-import { buildRatioCards, formatRupiah } from './DashboardParts'
+import { buildRatioCards } from '@/lib/dashboard/calculations'
 import {
   KpiCard,
   RatioCard,
@@ -17,6 +16,7 @@ import {
   LoanCompositionChart,
   NplTable,
   AlertPanel,
+  formatRupiah,
 } from './DashboardParts'
 
 interface Props {
@@ -48,7 +48,7 @@ export default function FinancialHealthDashboard({ data }: Props) {
       {/* ── HEADER ── */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-['DM_Serif_Display',serif] text-2xl font-normal text-white md:text-3xl">
+          <h1 className="font-serif text-2xl font-normal text-white md:text-3xl">
             Kesehatan Keuangan Koperasi
           </h1>
           <p className="mt-1 text-sm text-slate-400">
@@ -70,27 +70,10 @@ export default function FinancialHealthDashboard({ data }: Props) {
 
       {/* ── KPI ROW ── */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard
-          label="Total Aset"
-          value={formatRupiah(kpi.totalAset)}
-          change={kpi.asetChange}
-        />
-        <KpiCard
-          label="Total Pinjaman Aktif"
-          value={formatRupiah(kpi.totalPinjaman)}
-          change={kpi.pinjamanChange}
-        />
-        <KpiCard
-          label="Total Simpanan"
-          value={formatRupiah(kpi.totalSimpanan)}
-          change={kpi.simpananChange}
-        />
-        <KpiCard
-          label="SHU YTD"
-          value={formatRupiah(kpi.shuYtd)}
-          change={kpi.shuChange}
-          changeLabel="vs semester lalu"
-        />
+        <KpiCard label="Total Aset"           value={formatRupiah(kpi.totalAset)}     change={kpi.asetChange} />
+        <KpiCard label="Total Pinjaman Aktif" value={formatRupiah(kpi.totalPinjaman)} change={kpi.pinjamanChange} />
+        <KpiCard label="Total Simpanan"       value={formatRupiah(kpi.totalSimpanan)} change={kpi.simpananChange} />
+        <KpiCard label="SHU YTD"              value={formatRupiah(kpi.shuYtd)}        change={kpi.shuChange} changeLabel="vs semester lalu" />
       </div>
 
       {/* ── HEALTH INDEX + RATIOS ── */}
