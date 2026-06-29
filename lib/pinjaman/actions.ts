@@ -12,6 +12,7 @@ import {
   notifPinjamanLunas,
   notifPengajuanDiterima,
 } from '@/lib/notification/whatsapp'
+import { auditPinjaman } from '@/lib/audit/actions'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type PinjamanStatus =
@@ -367,6 +368,24 @@ export async function ajukanPinjaman(formData: FormData) {
   }
   // ─────────────────────────────────────────────────────────────────
 
+  auditPinjaman(
+    { id: session.id, nama: session.nama ?? '', role: session.role },
+    'AJUKAN_PINJAMAN',
+    `Pengajuan pinjaman ${pinjaman.nomor_kontrak} — Rp ${nominal.toLocaleString('id-ID')} / ${tenor} bulan`,
+    {
+      entityId: String(pinjaman.id),
+      nominal,
+      nilaiBaru: {
+        nomor_kontrak:  pinjaman.nomor_kontrak,
+        nominal_pokok:  nominal,
+        tenor_bulan:    tenor,
+        biaya_admin:    biayaAdmin,
+        nominal_diterima: totalDiterimaBersih,
+        status:         'PENDING_L1',
+      },
+    }
+  ).catch(console.error)
+
   const viewParam = !canOverride ? '?view=personal&' : '?'
   redirect(`/dashboard/pinjaman/${pinjaman.id}${viewParam}success=${encodeURIComponent('Pengajuan berhasil dikirim')}`)
 }
@@ -447,6 +466,32 @@ export async function approvePinjaman(formData: FormData) {
     }
   }
   // ─────────────────────────────────────────────────────────────────
+
+  if (action === 'approve') {
+    auditPinjaman(
+      { id: session.id, nama: session.nama ?? '', role: session.role },
+      pinjaman.status === 'PENDING_L1' ? 'APPROVE_L1'
+        : pinjaman.status === 'PENDING_L2' ? 'APPROVE_L2'
+        : 'APPROVE_L3',
+      `${session.role} menyetujui pinjaman ${pinjaman.nomor_kontrak}${catatan ? ` — "${catatan}"` : ''}`,
+      {
+        entityId: String(pinjamanId),
+        nilaiLama: { status: pinjaman.status },
+        nilaiBaru: { status: updateData.status, catatan: catatan || null },
+      }
+    ).catch(console.error)
+  } else {
+    auditPinjaman(
+      { id: session.id, nama: session.nama ?? '', role: session.role },
+      'REJECT_PINJAMAN',
+      `${session.role} menolak pinjaman ${pinjaman.nomor_kontrak} — alasan: "${catatan}"`,
+      {
+        entityId: String(pinjamanId),
+        nilaiLama: { status: pinjaman.status },
+        nilaiBaru: { status: 'REJECTED', rejected_reason: catatan },
+      }
+    ).catch(console.error)
+  }
 
   const msg = action === 'approve' ? 'Pinjaman berhasil disetujui' : 'Pinjaman berhasil ditolak'
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent(msg)}`)
@@ -548,6 +593,25 @@ export async function cairkanPinjaman(formData: FormData) {
 
   revalidatePath('/dashboard/pinjaman')
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
+
+  auditPinjaman(
+    { id: session.id, nama: session.nama ?? '', role: session.role },
+    'CAIRKAN_PINJAMAN',
+    `Pencairan pinjaman ${pinjaman.nomor_kontrak} — Rp ${Number(pinjaman.nominal_diterima).toLocaleString('id-ID')} cair ke anggota`,
+    {
+      entityId: String(pinjamanId),
+      nominal:  Number(pinjaman.nominal_pokok),
+      nilaiLama: { status: 'APPROVED' },
+      nilaiBaru: {
+        status:         'ACTIVE',
+        tanggal_cair:   tanggalFinalStr,
+        nominal_pokok:  pinjaman.nominal_pokok,
+        nominal_diterima: pinjaman.nominal_diterima,
+        biaya_admin:    pinjaman.biaya_admin,
+      },
+    }
+  ).catch(console.error)
+
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pencairan berhasil! Jurnal Akuntansi otomatis tercatat.')}`)
 }
 
@@ -616,6 +680,24 @@ export async function bayarCicilan(formData: FormData) {
 
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
   revalidatePath('/dashboard/pinjaman')
+
+  auditPinjaman(
+    { id: session.id, nama: session.nama ?? '', role: session.role },
+    'BAYAR_CICILAN',
+    `Pembayaran cicilan manual ${semuaLunas ? '(LUNAS)' : ''} — pinjaman ${pinjamanUpdated?.nomor_kontrak} — Rp ${nominalBayar.toLocaleString('id-ID')}`,
+    {
+      entityId: String(pinjamanId),
+      nominal:  nominalBayar,
+      nilaiBaru: {
+        cicilan_id:   cicilanId,
+        nominal_bayar: nominalBayar,
+        sisa_kali:    sisaKali,
+        sisa_pokok:   sisaPokok,
+        status_pinjaman: semuaLunas ? 'LUNAS' : 'ACTIVE',
+      },
+    }
+  ).catch(console.error)
+
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pembayaran berhasil & Jurnal tercatat.')}`)
 }
 
@@ -677,6 +759,19 @@ export async function pelunasanPinjamanSekaligus(formData: FormData) {
 
   revalidatePath(`/dashboard/pinjaman/${pinjamanId}`)
   revalidatePath('/dashboard/pinjaman')
+
+  auditPinjaman(
+    { id: session.id, nama: session.nama ?? '', role: session.role },
+    'PELUNASAN_SEKALIGUS',
+    `Pelunasan sekaligus pinjaman ${pinjaman.nomor_kontrak} — total Rp ${totalPelunasan.toLocaleString('id-ID')}`,
+    {
+      entityId: String(pinjamanId),
+      nominal:  totalPelunasan,
+      nilaiLama: { status: 'ACTIVE' },
+      nilaiBaru: { status: 'LUNAS', tanggal_lunas: tanggalPelunasan, total_dilunasi: totalPelunasan },
+    }
+  ).catch(console.error)
+
   redirect(`/dashboard/pinjaman/${pinjamanId}?success=${encodeURIComponent('Pelunasan berhasil diproses & Jurnal tercatat.')}`)
 }
 
@@ -768,6 +863,25 @@ export async function inputPinjamanExisting(formData: FormData) {
   }
 
   revalidatePath('/dashboard/pinjaman')
+
+  auditPinjaman(
+    { id: session.id, nama: session.nama ?? '', role: session.role },
+    'INPUT_PINJAMAN_EXISTING',
+    `Migrasi pinjaman lama ${pinjaman.nomor_kontrak} — Rp ${nominal.toLocaleString('id-ID')} / ${tenor} bulan (sudah bayar ${cicilan_terbayar}x)`,
+    {
+      entityId: String(pinjaman.id),
+      nominal,
+      nilaiBaru: {
+        nomor_kontrak:    pinjaman.nomor_kontrak,
+        nominal_pokok:    nominal,
+        cicilan_terbayar,
+        sisa_kali:        sisaKaliTersisa,
+        outstanding_sisa: outstandingSisa,
+        tanggal_pencairan,
+      },
+    }
+  ).catch(console.error)
+
   redirect(`/dashboard/pinjaman/${pinjaman.id}?success=${encodeURIComponent('Data pinjaman existing berhasil diinput')}`)
 }
 
@@ -860,6 +974,22 @@ export async function potongCicilanMassal(bulan: number, tahun: number) {
   }
 
   revalidatePath('/dashboard/pinjaman')
+
+  auditPinjaman(
+    { id: session.id, nama: session.nama ?? '', role: session.role },
+    'POTONG_CICILAN_MASSAL',
+    `Payroll pinjaman ${targetMonthStr} — ${cicilanTertarget.length} cicilan — total Rp ${totalMassal.toLocaleString('id-ID')}`,
+    {
+      nominal: totalMassal,
+      nilaiBaru: {
+        periode:        targetMonthStr,
+        jumlah_cicilan: cicilanTertarget.length,
+        total_nominal:  totalMassal,
+        nomor_jurnal:   nomorBuktiPayroll,
+      },
+    }
+  ).catch(console.error)
+
   return {
     success: true,
     message: `Berhasil memproses payroll pinjaman & Jurnal total Rp ${totalMassal.toLocaleString('id-ID')} otomatis tercatat!`,
